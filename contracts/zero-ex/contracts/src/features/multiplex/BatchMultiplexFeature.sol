@@ -43,7 +43,7 @@ contract MultiplexFeature is
 
     // TODO: this address is stored as immutable in FixinCommon, however we may have to implement a new
     //   modifier to assert that only delegatecalls can be performed (if required check).
-    //  remove mock validator and deploy in tests pipeline.
+    //  remove mock validator and deploy in tests pipeline. Remove `public` visibility after solc v0.8.19 upgrade.
     constructor() FixinCommon() {
         _validator = address(new BatchMultiplexValidator());
     }
@@ -53,8 +53,8 @@ contract MultiplexFeature is
     /// @return success `LibMigrate.SUCCESS` on success.
     // TODO: verify: 2 methods with same name require encoding, cannot be returned my method.selector.
     function migrate() external returns (bytes4 success) {
-        _registerFeatureFunction(abi.encodeWithSignature("batchMultiplex("bytes[]")");
-        _registerFeatureFunction(abi.encodeWithSignature("batchMultiplex("bytes[]","bytes","address")");
+        _registerFeatureFunction(abi.encodeWithSignature("batchMultiplex(bytes[])"));
+        _registerFeatureFunction(abi.encodeWithSignature("batchMultiplex(bytes[],bytes,address)"));
         // we may use the following method if we used a unified batchMultiplex method.
         //_registerFeatureFunction(this.batchMultiplex.selector);
         return LibMigrate.MIGRATE_SUCCESS;
@@ -67,7 +67,7 @@ contract MultiplexFeature is
     ///   gas expensive by using transient storage after the Cancun hardfork (Q1 2024). However, a reentrancy
     ///   in this context would only be caused by the `data` to contain a batchMultiplex call. We could add
     ///   the check to prevent unintended behavior.
-    function batchMultiplex(bytes[] calldata data) public returns (bytes[] memory results) {
+    function batchMultiplex(bytes[] calldata data) public override returns (bytes[] memory results) {
         results = new bytes[](data.length);
         for (uint256 i = 0; i < data.length; i++) {
             (bool success, bytes memory result) = address(this).delegatecall(data[i]);
@@ -91,7 +91,7 @@ contract MultiplexFeature is
         bytes[] calldata data,
         bytes calldata extraData,
         address validatorAddress
-    ) external returns (bytes[] memory results) {
+    ) external override returns (bytes[] memory results) {
         _validateCalldata(data, extraData, validatorAddress);
         results = batchMultiplex(data);
     }
@@ -103,7 +103,7 @@ contract MultiplexFeature is
         bytes calldata extraData,
         address validatorAddress,
         ErrorHandling errorType
-    ) external returns (bytes[] memory results) {
+    ) external override returns (bytes[] memory results) {
         _validateCalldata(data, extraData, validatorAddress);
 
         results = new bytes[](data.length);
