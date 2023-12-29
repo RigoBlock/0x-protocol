@@ -26,7 +26,8 @@ contract MultiplexFeature is
     IBatchMultiplexFeature,
     FixinCommon
 {
-    // BatchMultiplexValidator.validate.selector
+    // TODO: select only one `validate` method in validator contract
+    //bytes4 private constant _validateSelector = BatchMultiplexValidator.validate.selector;
     bytes4 private constant _validateSelector = bytes4(keccak256("validate(bytes[],bytes,address)"));
 
     // TODO: remove as this is mock for validator setup
@@ -143,8 +144,7 @@ contract MultiplexFeature is
         assert(validatorAddress == validator());
         (bool success, bytes memory returndata) = address(validator()).staticcall(
             abi.encodeWithSelector(
-                // we only use this constant once here, therefore we do not need to use an internal method and can save a little gas.
-                _validateSelector,
+                _getValidateSelector(),
                 data,
                 extraData,
                 msg.sender
@@ -160,4 +160,6 @@ contract MultiplexFeature is
     function validator() public view returns (address) {
         return _validator;
     }
+
+    function _getValidateSelector() private pure returns (bytes4) { return _validateSelector; }
 }
