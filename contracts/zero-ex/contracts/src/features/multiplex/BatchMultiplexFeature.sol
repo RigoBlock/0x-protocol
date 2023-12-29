@@ -14,7 +14,8 @@
 
 // This contract uses libraries that are compiled with an earlier version of solidity. We should check
 //  if can upgrade those libraries to use a more recent version.
-pragma solidity 0.8.19;
+pragma solidity ^0.6.5;
+pragma experimental ABIEncoderV2;
 
 import "../../examples/BatchMultiplexValidator.sol";
 import "../../fixins/FixinCommon.sol";
@@ -23,7 +24,7 @@ import "../interfaces/IFeature.sol";
 import "../interfaces/IBatchMultiplexFeature.sol";
 
 /// @dev This feature enables batch transactions by re-routing the single swaps to the exchange proxy.
-contract MultiplexFeature is
+contract BatchMultiplexFeature is
     IFeature,
     IBatchMultiplexFeature,
     FixinCommon
@@ -41,34 +42,36 @@ contract MultiplexFeature is
     /// @dev Version of this feature.
     uint256 public immutable override FEATURE_VERSION = _encodeVersion(1, 0, 0);
 
-    error UnknownErrorHandling();
+    //error UnknownErrorHandling();
 
     // TODO: this address is stored as immutable in FixinCommon, however we may have to implement a new
     //   modifier to assert that only delegatecalls can be performed (if required check).
     //  remove mock validator and deploy in tests pipeline. Remove `public` visibility after solc v0.8.19 upgrade.
-    constructor() FixinCommon() {
+    constructor() FixinCommon() public {
         _validator = address(new BatchMultiplexValidator());
     }
+
+    // TODO: should probably define a _registerFeatureFunction internal virtual override method
 
     /// @dev Initialize and register this feature.
     ///      Should be delegatecalled by `Migrate.migrate()`.
     /// @return success `LibMigrate.SUCCESS` on success.
     // TODO: verify: 2 methods with same name require encoding, cannot be returned my method.selector.
     function migrate() external returns (bytes4 success) {
-        _registerFeatureFunction(abi.encodeWithSignature("batchMultiplex(bytes[])"));
-        _registerFeatureFunction(abi.encodeWithSignature("batchMultiplex(bytes[],bytes,address)"));
+        _registerFeatureFunction(bytes4(keccak256("batchMultiplex(bytes[])")));
+        _registerFeatureFunction(bytes4(keccak256("batchMultiplex(bytes[],bytes,address)")));
         // we may use the following method if we used a unified batchMultiplex method.
         //_registerFeatureFunction(this.batchMultiplex.selector);
         return LibMigrate.MIGRATE_SUCCESS;
     }
 
+    // TODO: it could be more gas efficient to modify visibility of method to `external` and implement
+    //  logic in an internal/private method which can be called by the other methods as well.
+    //  the batchMultiplex methods should use a nonReentrant modifier, which could be made less
+    //  gas expensive by using transient storage after the Cancun hardfork (Q1 2024). However, a reentrancy
+    //  in this context would only be caused by the `data` to contain a batchMultiplex call. We could add
+    //  the check to prevent unintended behavior.
     /// @inheritdoc IBatchMultiplexFeature
-    /// TODO: it could be more gas efficient to modify visibility of method to `external` and implement
-    ///   logic in an internal/private method which can be called by the other methods as well.
-    /// TODO: the batchMultiplex methods should use a nonReentrant modifier, which could be made less
-    ///   gas expensive by using transient storage after the Cancun hardfork (Q1 2024). However, a reentrancy
-    ///   in this context would only be caused by the `data` to contain a batchMultiplex call. We could add
-    ///   the check to prevent unintended behavior.
     function batchMultiplex(bytes[] calldata data) public override returns (bytes[] memory results) {
         results = new bytes[](data.length);
         for (uint256 i = 0; i < data.length; i++) {
@@ -125,7 +128,8 @@ contract MultiplexFeature is
                 } else if (errorType == ErrorHandling.CONTINUE) {
                     continue;
                 } else {
-                    revert UnknownErrorHandling();
+                    //revert UnknownErrorHandling();
+                    revert("BATCH_MULTIPLEX_UNKNOW_ERROR");
                 }
             }
 
@@ -153,14 +157,25 @@ contract MultiplexFeature is
             )
         );
 
-        // we assert that data is returned by the validator contract and that it is indeed a contract. If we moved
-        //  revertbehavior to validator contract, we could return the error type here, but it could mean higher gas cost.
-        assert(success && abi.decode(returndata, (bool)) && address(validator()).code.length > 0);
+        // we assert that data is returned by the validator contract and that it is indeed a contract. If we moved revert
+        //  behavior to validator contract, we could return the error type here, but it could mean higher gas cost.
+        assert(success && abi.decode(returndata, (bool)) && _isContract(validator()));
     }
 
     /// TODO: remove this method as the validator in an arbitrary address input of the client that requires extra validation.
     function validator() public view returns (address) {
         return _validator;
+    }
+
+    // TODO: check if can reuse as internal or if should keep visibility as private
+    function _isContract(address target) private view returns (bool) {
+        // with solc > 0.8 we could use
+        //return address(validator()).code.length > 0;
+        uint256 size;
+        assembly {
+            size:= extcodesize(target)
+        }
+        return size != 0;
     }
 
     function _getValidateSelector() private pure returns (bytes4) { return _validateSelector; }

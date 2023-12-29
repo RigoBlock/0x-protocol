@@ -12,7 +12,8 @@
   limitations under the License.
 */
 
-pragma solidity 0.8.19;
+pragma solidity ^0.6.5;
+pragma experimental ABIEncoderV2;
 
 /// @dev A sample validator contract for the batck multiplex method.
 /// @notice Do not fall for ERC2771 address spoofing attack when implementing validation. The 0x protocol will
