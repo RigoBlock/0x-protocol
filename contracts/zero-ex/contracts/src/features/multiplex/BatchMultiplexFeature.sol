@@ -14,7 +14,7 @@
 
 pragma solidity 0.8.19;
 
-import "../../external/BatchMultiplexValidator.sol";
+import "../../examples/BatchMultiplexValidator.sol";
 import "../../fixins/FixinCommon.sol";
 import "../../migrations/LibMigrate.sol";
 import "../interfaces/IFeature.sol";
