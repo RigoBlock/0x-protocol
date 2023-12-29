@@ -24,6 +24,7 @@ import "src/features/OwnableFeature.sol";
 import "src/features/SimpleFunctionRegistryFeature.sol";
 import "src/features/NativeOrdersFeature.sol";
 import "src/features/BatchFillNativeOrdersFeature.sol";
+import "src/features/BatchMultiplexFeature.sol";
 import "src/features/FundRecoveryFeature.sol";
 import "src/features/TransformERC20Feature.sol";
 import "src/features/OtcOrdersFeature.sol";
@@ -63,6 +64,7 @@ contract DeployZeroEx is Test {
     struct Features {
         NativeOrdersFeature nativeOrdersFeature;
         BatchFillNativeOrdersFeature batchFillNativeOrdersFeature;
+        BatchMultiplexFeature batchMultiplexFeature;
         OtcOrdersFeature otcOrdersFeature;
         UniswapFeature uniswapFeature;
         UniswapV3Feature uniswapV3Feature;
@@ -130,6 +132,7 @@ contract DeployZeroEx is Test {
             "BatchFillNativeOrdersFeature",
             address(ZERO_EX_DEPLOYED.features.batchFillNativeOrdersFeature)
         );
+        emit log_named_address("BatchMultiplexFeature", address(ZERO_EX_DEPLOYED.features.batchMultiplexFeature));
         emit log_named_address("OtcOrdersFeature", address(ZERO_EX_DEPLOYED.features.otcOrdersFeature));
         emit log_named_address("UniswapFeature", address(ZERO_EX_DEPLOYED.features.uniswapFeature));
         emit log_named_address("UniswapV3Feature", address(ZERO_EX_DEPLOYED.features.uniswapV3Feature));
@@ -198,6 +201,7 @@ contract DeployZeroEx is Test {
             uint32(0) // protocolFeeMultiplier
         );
         ZERO_EX_DEPLOYED.features.batchFillNativeOrdersFeature = new BatchFillNativeOrdersFeature(address(ZERO_EX));
+        ZERO_EX_DEPLOYED.features.batchMultiplexFeature = new BatchMultiplexFeature(address(ZERO_EX));
         ZERO_EX_DEPLOYED.features.otcOrdersFeature = new OtcOrdersFeature(address(ZERO_EX), ZERO_EX_DEPLOYED.weth);
         ZERO_EX_DEPLOYED.features.uniswapFeature = new UniswapFeature(ZERO_EX_DEPLOYED.weth);
         ZERO_EX_DEPLOYED.features.uniswapV3Feature = new UniswapV3Feature(
@@ -242,6 +246,11 @@ contract DeployZeroEx is Test {
             abi.encodeWithSelector(BatchFillNativeOrdersFeature.migrate.selector),
             address(this)
         );
+        IZERO_EX.migrate(
+            address(ZERO_EX_DEPLOYED.features.batchMultiplexFeature),
+            abi.encodeWithSelector(BatchMultiplexFeature.migrate.selector),
+            address(this)
+        )
         IZERO_EX.migrate(
             address(ZERO_EX_DEPLOYED.features.transformERC20Feature),
             abi.encodeWithSelector(
