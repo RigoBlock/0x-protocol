@@ -12,8 +12,8 @@
   limitations under the License.
 */
 
-//pragma solidity ^0.8.19;
-pragma solidity >=0.6.12 <0.9.0;
+// This interface is inherited by IZeroEx, which compiles with pragma ^0.6.5
+pragma solidity >=0.6.5 <0.9.0;
 pragma experimental ABIEncoderV2;
 
 // TODO: assert that publicly exposed internal methods revert when called with batchMultiplex(...args)

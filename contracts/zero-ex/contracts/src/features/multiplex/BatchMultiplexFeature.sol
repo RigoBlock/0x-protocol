@@ -12,6 +12,8 @@
   limitations under the License.
 */
 
+// This contract uses libraries that are compiled with an earlier version of solidity. We should check
+//  if can upgrade those libraries to use a more recent version.
 pragma solidity 0.8.19;
 
 import "../../examples/BatchMultiplexValidator.sol";
