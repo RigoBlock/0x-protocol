@@ -19,26 +19,26 @@ pragma experimental ABIEncoderV2;
 /// @notice Do not fall for ERC2771 address spoofing attack when implementing validation. The 0x protocol will
 ///   always verify order signatures for meta transactions from signer regardless who is sending the transactions.
 contract BatchMultiplexValidator {
-    struct MockType {
-        address caller;
+    struct Batch {
+        bytes[] calls;
     }
 
-    // TODO: check if sender address should be appended as last 20 bytes of extraData, which would require extra
-    //  gas consumption for address decoding.
+    /// TODO: check how this validation can be skipped, i.e. if the validator input is not as expected.
+    /// @dev Validates the data passed from the 0x exchange proxy against the validator's requirements.
+    /// @param encodedCalls The swaps in 0x-protocol format.
+    /// @param /*extraData*/ An arbitrary string to be used as extra validation.
+    /// @param /*sender*/ The address that sent the transaction to the network.
+    /// @return isValid Boolean the bundle is valid.
+    /// @notice Visibility is `pure` to potentially allow reading from state.
     function validate(
-        bytes[] calldata calls,
+        bytes calldata encodedCalls,
         bytes calldata /*extraData*/,
         address /*sender*/
-    ) external pure returns (bool isValid) {
-        assert(calls.length > 0);
-        isValid = true;
-    }
-
-    // TODO: we should only implement 1 standard. The former has more explicit inputs and does not require sender
-    //  decoding, while the latter is the encoded package of the previous params and potentially more params.
-    function validate(bytes calldata dataPackage) external view returns (bool isValid) {
-        MockType memory mockType = MockType(abi.decode(dataPackage, (address)));
-        assert(mockType.caller == msg.sender);
+    ) external view returns (bool isValid) {
+        // here the first four bytes of the transaction (the selector) can be extracted and each swap call can
+        //  be decoded against its respective 0x-protocol format type.
+        Batch memory swaps = abi.decode(encodedCalls, (Batch));
+        assert(swaps.calls.length > 0);
         isValid = true;
     }
 }
