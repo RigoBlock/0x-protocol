@@ -201,7 +201,7 @@ contract DeployZeroEx is Test {
             uint32(0) // protocolFeeMultiplier
         );
         ZERO_EX_DEPLOYED.features.batchFillNativeOrdersFeature = new BatchFillNativeOrdersFeature(address(ZERO_EX));
-        ZERO_EX_DEPLOYED.features.batchMultiplexFeature = new BatchMultiplexFeature(address(ZERO_EX));
+        ZERO_EX_DEPLOYED.features.batchMultiplexFeature = new BatchMultiplexFeature();
         ZERO_EX_DEPLOYED.features.otcOrdersFeature = new OtcOrdersFeature(address(ZERO_EX), ZERO_EX_DEPLOYED.weth);
         ZERO_EX_DEPLOYED.features.uniswapFeature = new UniswapFeature(ZERO_EX_DEPLOYED.weth);
         ZERO_EX_DEPLOYED.features.uniswapV3Feature = new UniswapV3Feature(
