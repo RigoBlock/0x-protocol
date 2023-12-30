@@ -19,7 +19,6 @@ pragma experimental ABIEncoderV2;
 /// @notice Do not fall for ERC2771 address spoofing attack when implementing validation. The 0x protocol will
 ///   always verify order signatures for meta transactions from signer regardless who is sending the transactions.
 contract BatchMultiplexValidator {
-
     struct MockType {
         address caller;
     }

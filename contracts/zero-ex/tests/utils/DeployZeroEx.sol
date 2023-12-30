@@ -250,7 +250,7 @@ contract DeployZeroEx is Test {
             address(ZERO_EX_DEPLOYED.features.batchMultiplexFeature),
             abi.encodeWithSelector(BatchMultiplexFeature.migrate.selector),
             address(this)
-        )
+        );
         IZERO_EX.migrate(
             address(ZERO_EX_DEPLOYED.features.transformERC20Feature),
             abi.encodeWithSelector(

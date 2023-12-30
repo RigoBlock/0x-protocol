@@ -18,7 +18,6 @@ pragma experimental ABIEncoderV2;
 
 // TODO: assert that publicly exposed internal methods revert when called with batchMultiplex(...args)
 interface IBatchMultiplexFeature {
-
     // TODO: check if should move error handling into the validator contract, i.e. BatchMultiplexFeature will implement
     //  one method only, and the validator contract will revert with error if project needs to. In this context, we
     //  should pass the return from the calls to the validator contract as extraData before making the swap calls, or
