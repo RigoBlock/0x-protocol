@@ -149,8 +149,9 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon 
     ///   being sent to the network.
     function _validateCalldata(bytes[] calldata data, bytes calldata extraData, address validatorAddress) private view {
         //mock code, validator is arbitrary from caller with no impact as it is a staticcall
+        // low-level call of BatchMultiplexValidator(validatorAddress).validate(abi.encode(data), extraData, msg.sender)
         (bool success, bytes memory returndata) = validatorAddress.staticcall(
-            abi.encodeWithSelector(_getValidateSelector(), data, extraData, msg.sender)
+            abi.encodeWithSelector(_getValidateSelector(), abi.encode(data), extraData, msg.sender)
         );
 
         // we assert that data is returned by the validator contract and that it is a contract. If we moved revert
