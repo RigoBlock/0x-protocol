@@ -23,13 +23,14 @@ contract BatchMultiplexValidator {
         bytes[] calls;
     }
 
-    /// TODO: check how this validation can be skipped, i.e. if the validator input is not as expected.
+    // TODO: check how this validation can be skipped, i.e. if the validator input is not as expected.
+    //  Also check if instead of boolean could return calls, as a validator contract may filter some calls.
     /// @dev Validates the data passed from the 0x exchange proxy against the validator's requirements.
     /// @param encodedCalls The swaps in 0x-protocol format.
     /// @param /*extraData*/ An arbitrary string to be used as extra validation.
     /// @param /*sender*/ The address that sent the transaction to the network.
     /// @return isValid Boolean the bundle is valid.
-    /// @notice Visibility is `pure` to potentially allow reading from state.
+    /// @notice Visibility is not `pure` to potentially allow reading from state.
     function validate(
         bytes calldata encodedCalls,
         bytes calldata /*extraData*/,

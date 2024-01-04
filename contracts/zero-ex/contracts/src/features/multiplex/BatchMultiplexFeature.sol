@@ -139,6 +139,9 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon 
     //  transactions could be sent 1) to a validator that always returns `true` or 2) with a different batchMultiplex
     //  or 3) even via single transactions. The sender of this message should be a contract, and the transaction should
     //  be re-routed to the msg.sender as a callback.
+    // This method could be useful for clients that want to assert that transaction that go throuh that client append
+    // some extraData and the address where to validate them. An example would be a backend EIP712-validating the batch,
+    //  then returning the signature to the client as extraData and using their arbitrary verifier to assert validity.
     /// extraData should include encoded validator address as first arg, encoded error type enum as last byte, we could
     ///  then decode these values and pass the chopped extradata to the validator (only chop validator address).
     /// @notice We perform a staticcall to prevent reentrancy or other sorts of attacks by external contract, i.e. no
