@@ -83,7 +83,6 @@ contract BatchMultiplex is LocalTest, MultiplexUtils {
         );
     }
 
-
     function test_batchMultiplexExpectRevertWithInternalMethod() external {
         LibNativeOrder.RfqOrder memory rfqOrder = _makeTestRfqOrder();
         rfqOrder.taker = otherSignerAddress;
