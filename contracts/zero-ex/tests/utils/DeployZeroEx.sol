@@ -64,7 +64,6 @@ contract DeployZeroEx is Test {
     struct Features {
         NativeOrdersFeature nativeOrdersFeature;
         BatchFillNativeOrdersFeature batchFillNativeOrdersFeature;
-        BatchMultiplexFeature batchMultiplexFeature;
         OtcOrdersFeature otcOrdersFeature;
         UniswapFeature uniswapFeature;
         UniswapV3Feature uniswapV3Feature;
@@ -75,6 +74,7 @@ contract DeployZeroEx is Test {
         ERC1155OrdersFeature erc1155OrdersFeature;
         ERC721OrdersFeature erc721OrdersFeature;
         MultiplexFeature multiplexFeature;
+        BatchMultiplexFeature batchMultiplexFeature;
     }
 
     struct Transformers {

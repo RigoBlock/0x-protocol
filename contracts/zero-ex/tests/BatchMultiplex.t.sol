@@ -6,6 +6,7 @@ pragma experimental ABIEncoderV2;
 import {LocalTest} from "utils/LocalTest.sol";
 import {MultiplexUtils} from "utils/MultiplexUtils.sol";
 import {LibCommonRichErrors} from "src/errors/LibCommonRichErrors.sol";
+import {LibOwnableRichErrors} from "src/errors/LibOwnableRichErrors.sol";
 import {LibSignature} from "src/features/libs/LibSignature.sol";
 import {LibNativeOrder} from "src/features/libs/LibNativeOrder.sol";
 import {IMetaTransactionsFeatureV2} from "src/features/interfaces/IMetaTransactionsFeatureV2.sol";
@@ -38,7 +39,7 @@ contract BatchMultiplex is LocalTest, MultiplexUtils {
         zeroExDeployed.zeroEx.executeMetaTransactionV2(mtx, sig);
     }
 
-    function _executeBatchMultiplexTransactions(bytes[] calldata callData) private {
+    function _executeBatchMultiplexTransactions(bytes[] memory callData) private {
         zeroExDeployed.zeroEx.batchMultiplex(callData);
     }
 
@@ -61,26 +62,30 @@ contract BatchMultiplex is LocalTest, MultiplexUtils {
         );
     }
 
-    function test_batchMultiplex() external {
+    function test_batchMultiplexMetaTransaction() external {
         LibNativeOrder.RfqOrder memory rfqOrder = _makeTestRfqOrder();
         rfqOrder.taker = otherSignerAddress;
         _mintTo(address(rfqOrder.takerToken), otherSignerAddress, rfqOrder.takerAmount);
 
-        _executeBatchMultiplexTransactions(
-            [
-                abi.encodeWithSelector(
-                    zeroExDeployed.zeroEx.executeMetaTransactionV2,
-                    abi.encodeWithSelector(
-                        zeroExDeployed.zeroEx.multiplexBatchSellTokenForToken.selector,
-                        dai,
-                        zrx,
-                        _makeArray(_makeRfqSubcall(rfqOrder)),
-                        rfqOrder.takerAmount,
-                        rfqOrder.makerAmount
-                    )
-                )
-            ]
+        IMetaTransactionsFeatureV2.MetaTransactionDataV2 memory mtx;
+        LibSignature.Signature memory sig;
+        (mtx, sig) = _makeMetaTransactionV2(abi.encodeWithSelector(
+            zeroExDeployed.zeroEx.multiplexBatchSellTokenForToken.selector,
+            dai,
+            zrx,
+            _makeArray(_makeRfqSubcall(rfqOrder)),
+            rfqOrder.takerAmount,
+            rfqOrder.makerAmount
+        ));
+
+        bytes[] memory callsArray = new bytes[](1);
+        callsArray[0] = abi.encodeWithSelector(
+            zeroExDeployed.zeroEx.executeMetaTransactionV2.selector,
+            mtx,
+            sig
         );
+
+        _executeBatchMultiplexTransactions(callsArray);
     }
 
     function test_batchMultiplexExpectRevertWithInternalMethod() external {
@@ -88,44 +93,68 @@ contract BatchMultiplex is LocalTest, MultiplexUtils {
         rfqOrder.taker = otherSignerAddress;
         _mintTo(address(rfqOrder.takerToken), otherSignerAddress, rfqOrder.takerAmount);
 
-        // inputs won't match, we need to correctly encode params
-        _executeBatchMultiplexTransactions(
-            [
-                abi.encodeWithSelector(
-                    zeroExDeployed.zeroEx._fillRfqOrder.selector,
-                    _makeArray(_makeRfqSubcall(rfqOrder))
-                )
-            ]
+        LibSignature.Signature memory sig;
+        ( , sig) = _makeMetaTransactionV2(abi.encodeWithSelector(
+            zeroExDeployed.zeroEx.multiplexBatchSellTokenForToken.selector,
+            dai,
+            zrx,
+            _makeArray(_makeRfqSubcall(rfqOrder)),
+            rfqOrder.takerAmount,
+            rfqOrder.makerAmount
+        ));
+
+        // test revert onlySelf when calling method directly
+        vm.expectRevert(LibCommonRichErrors.OnlyCallableBySelfError(address(this)));
+        zeroExDeployed.zeroEx._fillRfqOrder(
+            rfqOrder,
+            sig,
+            rfqOrder.makerAmount,
+            rfqOrder.taker,
+            true,
+            address(this)
         );
 
-        /*LibNativeOrder.RfqOrder memory order,
-        LibSignature.Signature memory signature,
-        uint128 takerTokenFillAmount,
-        address taker,
-        bool useSelfBalance,
-        address recipient*/
+        bytes[] memory callsArray = new bytes[](1);
+        callsArray[0] = abi.encodeWithSelector(
+            zeroExDeployed.zeroEx._fillRfqOrder.selector,
+            rfqOrder,
+            sig,
+            rfqOrder.makerAmount,
+            rfqOrder.taker,
+            true,
+            address(this)
+        );
 
-        vm.expectRevert(LibCommonRichErrors.OnlyCallableBySelfError(address(this)));
-        /*_executeBatchMultiplexTransactions(
-            [
-                abi.encodeWithSelector(
-                    zeroExDeployed.zeroEx.fillRfqOrder.selector,
-                    _makeArray(_makeRfqSubcall(rfqOrder))
-                )
-            ]
-        );*/
+        // TODO: check if the following is acceptable or if there is a workaround
+        // The call reverts but Foundry does not return the error of low-level calls. When debugging the error,
+        //  the transaction is reverted with the expected error reason.
+        //vm.expectRevert(LibCommonRichErrors.OnlyCallableBySelfError(msg.sender));
+        vm.expectRevert();
+        _executeBatchMultiplexTransactions(callsArray);
+    }
+
+    function test_batchMultiplexRoleTakeover() external {
 
         // should revert when trying to add a selector mapping
-        _executeBatchMultiplexTransactions(
-            [
-                abi.encodeWithSelector(
-                    zeroExDeployed.zeroEx._extendSelf.selector,
-                    zeroExDeployed.zeroEx._extendSelf.selector,
-                    address(1)
-                )
-            ]
-        );
+        vm.expectRevert(LibOwnableRichErrors.OnlyOwnerError(address(this), zeroExDeployed.zeroEx.owner()));
+        zeroExDeployed.zeroEx.extend(bytes4(keccak256("_extendSelf(bytes4,address)")), address(1));
 
-        vm.expectRevert(LibCommonRichErrors.OnlyCallableBySelfError(address(this)));
+        // will revert as caller is not owner
+        vm.expectRevert(LibOwnableRichErrors.OnlyOwnerError(address(this), zeroExDeployed.zeroEx.owner()));
+        zeroExDeployed.zeroEx.extend(bytes4(keccak256("_extendSelf(bytes4,address)")), address(1));
+
+        // we try and get same result with batchMultiplex
+        bytes memory callData = abi.encodeWithSelector(
+            zeroExDeployed.zeroEx.extend.selector,
+            bytes4(keccak256("_extendSelf(bytes4,address)")),
+            address(1)
+        );
+        bytes[] memory callsArray = new bytes[](1);
+        callsArray[0] = callData;
+
+        // will revert with same error as underlying zeroEx call but Forge won't capture it in low-level call
+        //vm.expectRevert(LibOwnableRichErrors.OnlyOwnerError((address(this)), zeroExDeployed.zeroEx.owner()));
+        vm.expectRevert();
+        _executeBatchMultiplexTransactions(callsArray);
     }
 }
