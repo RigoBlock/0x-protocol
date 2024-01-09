@@ -70,21 +70,19 @@ contract BatchMultiplex is LocalTest, MultiplexUtils {
 
         IMetaTransactionsFeatureV2.MetaTransactionDataV2 memory mtx;
         LibSignature.Signature memory sig;
-        (mtx, sig) = _makeMetaTransactionV2(abi.encodeWithSelector(
-            zeroExDeployed.zeroEx.multiplexBatchSellTokenForToken.selector,
-            dai,
-            zrx,
-            _makeArray(_makeRfqSubcall(rfqOrder)),
-            rfqOrder.takerAmount,
-            rfqOrder.makerAmount
-        ));
+        (mtx, sig) = _makeMetaTransactionV2(
+            abi.encodeWithSelector(
+                zeroExDeployed.zeroEx.multiplexBatchSellTokenForToken.selector,
+                dai,
+                zrx,
+                _makeArray(_makeRfqSubcall(rfqOrder)),
+                rfqOrder.takerAmount,
+                rfqOrder.makerAmount
+            )
+        );
 
         bytes[] memory callsArray = new bytes[](1);
-        callsArray[0] = abi.encodeWithSelector(
-            zeroExDeployed.zeroEx.executeMetaTransactionV2.selector,
-            mtx,
-            sig
-        );
+        callsArray[0] = abi.encodeWithSelector(zeroExDeployed.zeroEx.executeMetaTransactionV2.selector, mtx, sig);
 
         _executeBatchMultiplexTransactions(callsArray);
     }
@@ -95,25 +93,20 @@ contract BatchMultiplex is LocalTest, MultiplexUtils {
         _mintTo(address(rfqOrder.takerToken), otherSignerAddress, rfqOrder.takerAmount);
 
         LibSignature.Signature memory sig;
-        ( , sig) = _makeMetaTransactionV2(abi.encodeWithSelector(
-            zeroExDeployed.zeroEx.multiplexBatchSellTokenForToken.selector,
-            dai,
-            zrx,
-            _makeArray(_makeRfqSubcall(rfqOrder)),
-            rfqOrder.takerAmount,
-            rfqOrder.makerAmount
-        ));
+        (, sig) = _makeMetaTransactionV2(
+            abi.encodeWithSelector(
+                zeroExDeployed.zeroEx.multiplexBatchSellTokenForToken.selector,
+                dai,
+                zrx,
+                _makeArray(_makeRfqSubcall(rfqOrder)),
+                rfqOrder.takerAmount,
+                rfqOrder.makerAmount
+            )
+        );
 
         // test revert onlySelf when calling method directly
         vm.expectRevert(LibCommonRichErrors.OnlyCallableBySelfError(address(this)));
-        zeroExDeployed.zeroEx._fillRfqOrder(
-            rfqOrder,
-            sig,
-            rfqOrder.makerAmount,
-            rfqOrder.taker,
-            true,
-            address(this)
-        );
+        zeroExDeployed.zeroEx._fillRfqOrder(rfqOrder, sig, rfqOrder.makerAmount, rfqOrder.taker, true, address(this));
 
         bytes[] memory callsArray = new bytes[](1);
         callsArray[0] = abi.encodeWithSelector(
@@ -135,7 +128,6 @@ contract BatchMultiplex is LocalTest, MultiplexUtils {
     }
 
     function test_batchMultiplexRoleTakeover() external {
-
         // should revert when trying to add a selector mapping
         vm.expectRevert(LibOwnableRichErrors.OnlyOwnerError(address(this), zeroExDeployed.zeroEx.owner()));
         zeroExDeployed.zeroEx.extend(bytes4(keccak256("_extendSelf(bytes4,address)")), address(1));
@@ -160,14 +152,29 @@ contract BatchMultiplex is LocalTest, MultiplexUtils {
 
         // TODO: test the following assertiong with multiple calls
         vm.expectRevert();
-        zeroExDeployed.zeroEx.batchMultiplex(callsArray, callData, address(0), IBatchMultiplexFeature.ErrorHandling.REVERT);
+        zeroExDeployed.zeroEx.batchMultiplex(
+            callsArray,
+            callData,
+            address(0),
+            IBatchMultiplexFeature.ErrorHandling.REVERT
+        );
 
         // should break on failing transaction but not revert entire transaction
         vm.expectRevert();
-        zeroExDeployed.zeroEx.batchMultiplex(callsArray, callData, address(0), IBatchMultiplexFeature.ErrorHandling.STOP);
+        zeroExDeployed.zeroEx.batchMultiplex(
+            callsArray,
+            callData,
+            address(0),
+            IBatchMultiplexFeature.ErrorHandling.STOP
+        );
 
         // should not revert on failing transaction
         vm.expectRevert();
-        zeroExDeployed.zeroEx.batchMultiplex(callsArray, callData, address(0), IBatchMultiplexFeature.ErrorHandling.CONTINUE);
+        zeroExDeployed.zeroEx.batchMultiplex(
+            callsArray,
+            callData,
+            address(0),
+            IBatchMultiplexFeature.ErrorHandling.CONTINUE
+        );
     }
 }

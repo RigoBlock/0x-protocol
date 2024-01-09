@@ -140,7 +140,7 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon 
     ///   This validation is used by clients that want to assert extra-conditions with their own validation logic,
     ///   ensuring their interface processes transactions according to it. An example would be a backend EIP712-validate
     ///   a batch, then return the signature to the client as extraData and use the verifier to assert validity.
-    /// @param calldata The batch of 0x protocol transactions.
+    /// @param data The batch of 0x protocol transactions.
     /// @param extraData An arbitrary array of data to be validated.
     /// @param validatorAddress The address of the designated validator contract.
     function _validateCalldata(bytes[] calldata data, bytes calldata extraData, address validatorAddress) private view {
