@@ -30,10 +30,9 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon 
     // TODO: remove as this is mock for validator setup and tests
     address public immutable _validator;
 
-    // TODO: check as visibility of immutables should be `external`
-    /// @dev Name of this feature.
+    /// @inheritdoc IFeature
     string public constant override FEATURE_NAME = "BatchMultiplexFeature";
-    /// @dev Version of this feature.
+    /// @inheritdoc IFeature
     uint256 public immutable override FEATURE_VERSION = _encodeVersion(1, 0, 0);
 
     // TODO: this address is stored as immutable in FixinCommon, however we may have to implement a new
@@ -43,11 +42,9 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon 
         _validator = address(new BatchMultiplexValidator());
     }
 
-    // TODO: could define a _registerFeatureFunction internal virtual override method
     /// @dev Initialize and register this feature.
     ///      Should be delegatecalled by `Migrate.migrate()`.
     /// @return success `LibMigrate.SUCCESS` on success.
-    // TODO: verify: 2 methods with same name require encoding, cannot be returned my method.selector.
     function migrate() external returns (bytes4 success) {
         // we may use the following method if we used a unified batchMultiplex method.
         //_registerFeatureFunction(this.batchMultiplex.selector);
@@ -61,7 +58,7 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon 
     //  cost to the swap transaction (≃60 extra gas in total) but expose only two batchMultiplex method.
     //  Also check if should assert inputs validity.
     /// @inheritdoc IBatchMultiplexFeature
-    // could also be validated for every call, i.e. allow stop, revert or continue.
+    // Alternativaly, the single calls could be validated, i.e. allow stop, revert or continue.
     function batchMultiplex(
         bytes[] calldata data,
         bytes calldata extraData,
@@ -135,23 +132,18 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon 
         }
     }
 
-    // TODO: check if this validation is useful at all as the validation address is arbitrary. Technically, the same
-    //  transactions could be sent 1) to a validator that always returns `true` or 2) with a different batchMultiplex
-    //  or 3) even via single transactions. The sender of this message should be a contract, and the transaction should
-    //  be re-routed to the msg.sender as a callback.
-    // This method could be useful for clients that want to assert that transaction that go throuh that client append
-    // some extraData and the address where to validate them. An example would be a backend EIP712-validating the batch,
-    //  then returning the signature to the client as extraData and using their arbitrary verifier to assert validity.
-    /// extraData should include encoded validator address as first arg, encoded error type enum as last byte, we could
-    ///  then decode these values and pass the chopped extradata to the validator (only chop validator address).
+    /// @dev An internal validator method. Reverts if validation in the validator contract fails.
     /// @notice We perform a staticcall to prevent reentrancy or other sorts of attacks by external contract, i.e. no
-    //    state changes. However, this could levied at a later stage. While the method is protected against internal
-    //    state changes, nothing guarantees that the transaction is protected against frontrunning --> should not rely
-    //    on this validation for onchain variables that can be manipulated, i.e. oracles or similar.
-    /// @notice We could change visibility of this method to `public` so the call can be validated by client before
-    ///   being sent to the network.
+    ///   state changes. However, this could be levied at a later stage. While the method is protected against internal
+    ///   state changes, nothing guarantees that the transaction is protected against frontrunning --> should not rely
+    ///   on this validation for onchain variables that can be manipulated, i.e. oracles or similar.
+    ///   This validation is used by clients that want to assert extra-conditions with their own validation logic,
+    ///   ensuring their interface processes transactions according to it. An example would be a backend EIP712-validate
+    ///   a batch, then return the signature to the client as extraData and use the verifier to assert validity.
+    /// @param calldata The batch of 0x protocol transactions.
+    /// @param extraData An arbitrary array of data to be validated.
+    /// @param validatorAddress The address of the designated validator contract.
     function _validateCalldata(bytes[] calldata data, bytes calldata extraData, address validatorAddress) private view {
-        //mock code, validator is arbitrary from caller with no impact as it is a staticcall
         // low-level call of BatchMultiplexValidator(validatorAddress).validate(abi.encode(data), extraData, msg.sender)
         (bool success, bytes memory returndata) = validatorAddress.staticcall(
             abi.encodeWithSelector(_getValidateSelector(), abi.encode(data), extraData, msg.sender)
