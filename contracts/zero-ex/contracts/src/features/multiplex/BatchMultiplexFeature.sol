@@ -91,12 +91,12 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon 
             (bool success, bytes memory result) = address(this).delegatecall(data[i]);
 
             if (!success) {
-                // Next 5 lines from https://ethereum.stackexchange.com/a/83577
-                if (result.length < 68) revert();
-                assembly {
-                    result := add(result, 0x04)
-                }
                 if (errorType == ErrorHandling.REVERT) {
+                    // Next 5 lines from https://ethereum.stackexchange.com/a/83577
+                    if (result.length < 68) revert();
+                    assembly {
+                        result := add(result, 0x04)
+                    }
                     revert(abi.decode(result, (string)));
                 } else if (errorType == ErrorHandling.STOP) {
                     break;
