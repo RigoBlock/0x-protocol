@@ -9,6 +9,7 @@ import {LibCommonRichErrors} from "src/errors/LibCommonRichErrors.sol";
 import {LibOwnableRichErrors} from "src/errors/LibOwnableRichErrors.sol";
 import {LibSignature} from "src/features/libs/LibSignature.sol";
 import {LibNativeOrder} from "src/features/libs/LibNativeOrder.sol";
+import {IBatchMultiplexFeature} from "src/features/interfaces/IBatchMultiplexFeature.sol";
 import {IMetaTransactionsFeatureV2} from "src/features/interfaces/IMetaTransactionsFeatureV2.sol";
 
 contract BatchMultiplex is LocalTest, MultiplexUtils {
@@ -156,5 +157,17 @@ contract BatchMultiplex is LocalTest, MultiplexUtils {
         //vm.expectRevert(LibOwnableRichErrors.OnlyOwnerError((address(this)), zeroExDeployed.zeroEx.owner()));
         vm.expectRevert();
         _executeBatchMultiplexTransactions(callsArray);
+
+        // TODO: test the following assertiong with multiple calls
+        vm.expectRevert();
+        zeroExDeployed.zeroEx.batchMultiplex(callsArray, callData, address(0), IBatchMultiplexFeature.ErrorHandling.REVERT);
+
+        // should break on failing transaction but not revert entire transaction
+        vm.expectRevert();
+        zeroExDeployed.zeroEx.batchMultiplex(callsArray, callData, address(0), IBatchMultiplexFeature.ErrorHandling.STOP);
+
+        // should not revert on failing transaction
+        vm.expectRevert();
+        zeroExDeployed.zeroEx.batchMultiplex(callsArray, callData, address(0), IBatchMultiplexFeature.ErrorHandling.CONTINUE);
     }
 }
