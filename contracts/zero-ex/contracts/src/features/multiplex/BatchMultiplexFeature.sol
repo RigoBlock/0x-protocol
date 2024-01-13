@@ -12,19 +12,19 @@
   limitations under the License.
 */
 
-// This contract uses libraries that are compiled with an earlier version of solidity. We should check
-//  if can upgrade those libraries to use a more recent version.
 pragma solidity ^0.6.5;
 pragma experimental ABIEncoderV2;
 
+import "@0x/contracts-utils/contracts/src/v06/LibSafeMathV06.sol";
 import "../../examples/BatchMultiplexValidator.sol";
 import "../../fixins/FixinCommon.sol";
+import "../../fixins/FixinReentrancyGuard.sol";
 import "../../migrations/LibMigrate.sol";
 import "../interfaces/IFeature.sol";
 import "../interfaces/IBatchMultiplexFeature.sol";
 
 /// @dev This feature enables batch transactions by re-routing the single swaps to the exchange proxy.
-contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon {
+contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon, FixinReentrancyGuard {
     bytes4 private constant _VALIDATE_SELECTOR = BatchMultiplexValidator.validate.selector;
 
     // TODO: remove as this is mock for validator setup and tests
@@ -35,8 +35,29 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon 
     /// @inheritdoc IFeature
     uint256 public immutable override FEATURE_VERSION = _encodeVersion(1, 0, 0);
 
-    // TODO: this address is stored as immutable in FixinCommon, however we may have to implement a new
-    //   modifier to assert that only delegatecalls can be performed (if required check).
+    /// @dev Refunds up to `msg.value` leftover ETH at the end of the call.
+    modifier refundsAttachedEth() {
+        _;
+        uint256 remainingBalance = LibSafeMathV06.min256(msg.value, address(this).balance);
+        if (remainingBalance > 0) {
+            msg.sender.transfer(remainingBalance);
+        }
+    }
+
+    /// @dev Ensures that the ETH balance of `this` does not go below the
+    ///      initial ETH balance before the call (excluding ETH attached to the call).
+    modifier doesNotReduceEthBalance() {
+        uint256 initialBalance = address(this).balance - msg.value;
+        _;
+        require(initialBalance <= address(this).balance, "Batch_M_Feature/ETH_LEAK");
+    }
+
+    // reading immutable through internal method more gas efficient
+    modifier onlyDelegateCall() {
+        _checkDelegateCall();
+        _;
+    }
+
     constructor() public FixinCommon() {
         // TODO: remove mock validator and deploy in tests pipeline.
         _validator = address(new BatchMultiplexValidator());
@@ -46,37 +67,79 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon 
     ///      Should be delegatecalled by `Migrate.migrate()`.
     /// @return success `LibMigrate.SUCCESS` on success.
     function migrate() external returns (bytes4 success) {
-        // we may use the following method if we used a unified batchMultiplex method.
-        //_registerFeatureFunction(this.batchMultiplex.selector);
         _registerFeatureFunction(bytes4(keccak256("batchMultiplex(bytes[])")));
         _registerFeatureFunction(bytes4(keccak256("batchMultiplex(bytes[],bytes,address)")));
         _registerFeatureFunction(bytes4(keccak256("batchMultiplex(bytes[],bytes,address,uint256)")));
         return LibMigrate.MIGRATE_SUCCESS;
     }
 
-    // TODO: all methods could potentially be merged and params made optional by api. This will add a marginal
-    //  cost to the swap transaction (≃60 extra gas in total) but expose only two batchMultiplex method.
-    //  Also check if should assert inputs validity.
     /// @inheritdoc IBatchMultiplexFeature
-    // Alternativaly, the single calls could be validated, i.e. allow stop, revert or continue.
+    function batchMultiplex(
+        bytes[] calldata data
+    )
+        external
+        payable
+        override
+        onlyDelegateCall
+        nonReentrant(REENTRANCY_BATCH_MULTIPLEX)
+        doesNotReduceEthBalance
+        refundsAttachedEth
+        returns (bytes[] memory results)
+    {
+        results = new bytes[](data.length);
+        for (uint256 i = 0; i < data.length; i++) {
+            (bool success, bytes memory result) = address(this).delegatecall(data[i]);
+
+            if (!success) {
+                // Next 5 lines from https://ethereum.stackexchange.com/a/83577
+                if (result.length < 68) revert();
+                assembly {
+                    result := add(result, 0x04)
+                }
+                revert(abi.decode(result, (string)));
+            }
+
+            results[i] = result;
+        }
+    }
+
+    /// @inheritdoc IBatchMultiplexFeature
+    /// @notice Validator contract will assert validity of `extraData`.
     function batchMultiplex(
         bytes[] calldata data,
         bytes calldata extraData,
         address validatorAddress
-    ) external override returns (bytes[] memory results) {
-        _validateCalldata(data, extraData, validatorAddress);
-        results = batchMultiplex(data);
+    )
+        external
+        payable
+        override
+        onlyDelegateCall
+        nonReentrant(REENTRANCY_BATCH_MULTIPLEX)
+        doesNotReduceEthBalance
+        refundsAttachedEth
+        returns (bytes[] memory results)
+    {
+        results = batchMultiplex(data, extraData, validatorAddress, ErrorHandling.REVERT);
     }
 
     /// @inheritdoc IBatchMultiplexFeature
-    /// @notice This method should be used to get desired behavior STOP, REVERT, CONTINUE
+    /// @notice This method should be used to get desired behavior STOP, REVERT, CONTINUE.
+    ///   Validator contract will assert validity of `extraData`.
     function batchMultiplex(
         bytes[] calldata data,
         bytes calldata extraData,
         address validatorAddress,
         ErrorHandling errorType
-    ) external override returns (bytes[] memory results) {
-        // TODO: can alternatively expose a fourth "batchMultiplex(bytes[], ErrorHandling)" method.
+    )
+        public
+        payable
+        override
+        onlyDelegateCall
+        nonReentrant(REENTRANCY_BATCH_MULTIPLEX)
+        doesNotReduceEthBalance
+        refundsAttachedEth
+        returns (bytes[] memory results)
+    {
         // skip validation if validator is nil address, allows sending a batch of swaps with desired error behavior
         //  by using nil address as validator.
         if (validatorAddress != address(0)) {
@@ -109,27 +172,8 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon 
         }
     }
 
-    // TODO: the batchMultiplex methods should use a nonReentrant modifier, which could be made less
-    //  gas expensive by using transient storage after the Cancun hardfork (Q1 2024). However, a reentrancy
-    //  in this context would only be caused by the `data` to contain a batchMultiplex call. We could add
-    //  the check to prevent unintended behavior. Underlying methods use their reentrancy modifier.
-    /// @inheritdoc IBatchMultiplexFeature
-    function batchMultiplex(bytes[] calldata data) public override returns (bytes[] memory results) {
-        results = new bytes[](data.length);
-        for (uint256 i = 0; i < data.length; i++) {
-            (bool success, bytes memory result) = address(this).delegatecall(data[i]);
-
-            if (!success) {
-                // Next 5 lines from https://ethereum.stackexchange.com/a/83577
-                if (result.length < 68) revert();
-                assembly {
-                    result := add(result, 0x04)
-                }
-                revert(abi.decode(result, (string)));
-            }
-
-            results[i] = result;
-        }
+    function _checkDelegateCall() private view {
+        require(address(this) != _implementation, "BATCH_M_DIRECT_CALL_ERROR");
     }
 
     /// @dev An internal validator method. Reverts if validation in the validator contract fails.
@@ -149,9 +193,8 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon 
             abi.encodeWithSelector(_getValidateSelector(), abi.encode(data), extraData, msg.sender)
         );
 
-        // we assert that data is returned by the validator contract and that it is a contract. If we moved revert
-        //  behavior to validator contract, we could return the error type here, but it could mean higher gas cost.
-        //  Reverts if target validator does not implement `validate` method.
+        // we assert that a boolean is returned by the validator contract and that it is a contract. Reverts if
+        //  validator does not implement `validate` method.
         assert(success && abi.decode(returndata, (bool)) && _isContract(validatorAddress));
     }
 

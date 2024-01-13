@@ -18,10 +18,6 @@ pragma experimental ABIEncoderV2;
 
 // TODO: assert that publicly exposed internal methods revert when called with batchMultiplex(...args)
 interface IBatchMultiplexFeature {
-    // TODO: check if should move error handling into the validator contract, i.e. BatchMultiplexFeature will implement
-    //  one method only, and the validator contract will revert with error if project needs to. In this context, we
-    //  should pass the return from the calls to the validator contract as extraData before making the swap calls, or
-    //  we should verify in the validator contract with _beforeCall and _afterCall hooks.
     enum ErrorHandling {
         REVERT,
         STOP,
@@ -31,7 +27,7 @@ interface IBatchMultiplexFeature {
     /// @dev Routes the swaps in the `data` array to their respective swap implementations.
     /// @param data The array of swap transactions.
     /// @return results The array of returned values from the swap calls.
-    function batchMultiplex(bytes[] calldata data) external returns (bytes[] memory results);
+    function batchMultiplex(bytes[] calldata data) external payable returns (bytes[] memory results);
 
     /// @dev Routes the swaps in the `data` array to their respective swap implementations after
     ///   validating them in an external validator contract and passes extra data to it.
@@ -43,7 +39,7 @@ interface IBatchMultiplexFeature {
         bytes[] calldata data,
         bytes calldata extraData,
         address validatorAddress
-    ) external returns (bytes[] memory results);
+    ) external payable returns (bytes[] memory results);
 
     /// @dev Routes the swaps in the `data` array to their respective swap implementations after
     ///   validating them in an external validator contract and passes extra data and the desired error behavior.
@@ -57,5 +53,5 @@ interface IBatchMultiplexFeature {
         bytes calldata extraData,
         address validatorAddress,
         ErrorHandling errorType
-    ) external returns (bytes[] memory results);
+    ) external payable returns (bytes[] memory results);
 }
