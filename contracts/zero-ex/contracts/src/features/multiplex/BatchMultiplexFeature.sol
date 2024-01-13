@@ -49,7 +49,7 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
     modifier doesNotReduceEthBalance() {
         uint256 initialBalance = address(this).balance - msg.value;
         _;
-        require(initialBalance <= address(this).balance, "Batch_M_Feature/ETH_LEAK");
+        require(initialBalance <= address(this).balance, "Batch_M_Feat/ETH_LEAK");
     }
 
     // reading immutable through internal method more gas efficient
@@ -163,8 +163,7 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
                 } else if (errorType == ErrorHandling.CONTINUE) {
                     continue;
                 } else {
-                    // TODO: check if should add error from lib or upgrade to 0.8
-                    revert("BATCH_MULTIPLEX_UNKNOW_ERROR");
+                    revert("Batch_M_Feat/UNKNOW_ERROR");
                 }
             }
 
@@ -173,7 +172,7 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
     }
 
     function _checkDelegateCall() private view {
-        require(address(this) != _implementation, "BATCH_M_DIRECT_CALL_ERROR");
+        require(address(this) != _implementation, "Batch_M_Feat/DIRECT_CALL_ERROR");
     }
 
     /// @dev An internal validator method. Reverts if validation in the validator contract fails.
