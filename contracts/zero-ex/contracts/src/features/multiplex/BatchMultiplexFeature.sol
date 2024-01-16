@@ -37,8 +37,10 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
 
     /// @dev Refunds up to `msg.value` leftover ETH at the end of the call.
     modifier refundsAttachedEth() {
+        uint256 initialBalance = address(this).balance - msg.value;
         _;
-        uint256 remainingBalance = LibSafeMathV06.min256(msg.value, address(this).balance);
+        // `doesNotReduceEthBalance` ensures address(this).balance >= initialBalance
+        uint256 remainingBalance = LibSafeMathV06.min256(msg.value, address(this).balance - initialBalance);
         if (remainingBalance > 0) {
             msg.sender.transfer(remainingBalance);
         }
