@@ -7,12 +7,19 @@ import {LocalTest} from "utils/LocalTest.sol";
 import {MultiplexUtils} from "utils/MultiplexUtils.sol";
 import {LibCommonRichErrors} from "src/errors/LibCommonRichErrors.sol";
 import {LibOwnableRichErrors} from "src/errors/LibOwnableRichErrors.sol";
+import "src/examples/BatchMultiplexValidator.sol";
 import {LibSignature} from "src/features/libs/LibSignature.sol";
 import {LibNativeOrder} from "src/features/libs/LibNativeOrder.sol";
 import {IBatchMultiplexFeature} from "src/features/interfaces/IBatchMultiplexFeature.sol";
 import {IMetaTransactionsFeatureV2} from "src/features/interfaces/IMetaTransactionsFeatureV2.sol";
 
 contract BatchMultiplex is LocalTest, MultiplexUtils {
+    address public immutable _validator;
+
+    constructor() public {
+        _validator = address(new BatchMultiplexValidator());
+    }
+
     function _makeMetaTransactionV2(
         bytes memory callData
     ) private view returns (IMetaTransactionsFeatureV2.MetaTransactionDataV2 memory, LibSignature.Signature memory) {
@@ -84,6 +91,10 @@ contract BatchMultiplex is LocalTest, MultiplexUtils {
         bytes[] memory callsArray = new bytes[](1);
         callsArray[0] = abi.encodeWithSelector(zeroExDeployed.zeroEx.executeMetaTransactionV2.selector, mtx, sig);
 
+        // direct call to implementation is not allowed
+        vm.expectRevert("Batch_M_Feat/DIRECT_CALL_ERROR");
+        zeroExDeployed.features.batchMultiplexFeature.batchMultiplex(callsArray);
+
         _executeBatchMultiplexTransactions(callsArray);
     }
 
@@ -119,11 +130,7 @@ contract BatchMultiplex is LocalTest, MultiplexUtils {
             address(this)
         );
 
-        // TODO: check if the following is acceptable or if there is a workaround
-        // The call reverts but Foundry does not return the error of low-level calls. When debugging the error,
-        //  the transaction is reverted with the expected error reason.
-        //vm.expectRevert(LibCommonRichErrors.OnlyCallableBySelfError(msg.sender));
-        vm.expectRevert();
+        vm.expectRevert(LibCommonRichErrors.OnlyCallableBySelfError(address(this)));
         _executeBatchMultiplexTransactions(callsArray);
     }
 
@@ -132,47 +139,39 @@ contract BatchMultiplex is LocalTest, MultiplexUtils {
         vm.expectRevert(LibOwnableRichErrors.OnlyOwnerError(address(this), zeroExDeployed.zeroEx.owner()));
         zeroExDeployed.zeroEx.extend(bytes4(keccak256("_extendSelf(bytes4,address)")), address(1));
 
-        // will revert as caller is not owner
-        vm.expectRevert(LibOwnableRichErrors.OnlyOwnerError(address(this), zeroExDeployed.zeroEx.owner()));
-        zeroExDeployed.zeroEx.extend(bytes4(keccak256("_extendSelf(bytes4,address)")), address(1));
-
         // we try and get same result with batchMultiplex
-        bytes memory callData = abi.encodeWithSelector(
+        bytes[] memory callsArray = new bytes[](1);
+        callsArray[0] = abi.encodeWithSelector(
             zeroExDeployed.zeroEx.extend.selector,
             bytes4(keccak256("_extendSelf(bytes4,address)")),
             address(1)
         );
-        bytes[] memory callsArray = new bytes[](1);
-        callsArray[0] = callData;
 
-        // will revert with same error as underlying zeroEx call but Forge won't capture it in low-level call
-        //vm.expectRevert(LibOwnableRichErrors.OnlyOwnerError((address(this)), zeroExDeployed.zeroEx.owner()));
-        vm.expectRevert();
+        vm.expectRevert(LibOwnableRichErrors.OnlyOwnerError(address(this), zeroExDeployed.zeroEx.owner()));
         _executeBatchMultiplexTransactions(callsArray);
 
         // TODO: test the following assertiong with multiple calls
-        vm.expectRevert();
-        zeroExDeployed.zeroEx.batchMultiplex(
+        bytes memory mockBytes = callsArray[0];
+        vm.expectRevert(LibOwnableRichErrors.OnlyOwnerError(address(this), zeroExDeployed.zeroEx.owner()));
+        zeroExDeployed.zeroEx.batchMultiplexOptionalParams(
             callsArray,
-            callData,
+            mockBytes,
             address(0),
             IBatchMultiplexFeature.ErrorHandling.REVERT
         );
 
-        // should break on failing transaction but not revert entire transaction
-        vm.expectRevert();
-        zeroExDeployed.zeroEx.batchMultiplex(
+        // does not extend but does stops instead of reverting
+        zeroExDeployed.zeroEx.batchMultiplexOptionalParams(
             callsArray,
-            callData,
+            mockBytes,
             address(0),
             IBatchMultiplexFeature.ErrorHandling.STOP
         );
 
-        // should not revert on failing transaction
-        vm.expectRevert();
-        zeroExDeployed.zeroEx.batchMultiplex(
+        // does not extend but tries to continue exeuting next txns
+        zeroExDeployed.zeroEx.batchMultiplexOptionalParams(
             callsArray,
-            callData,
+            mockBytes,
             address(0),
             IBatchMultiplexFeature.ErrorHandling.CONTINUE
         );
