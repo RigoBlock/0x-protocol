@@ -27,9 +27,6 @@ import "../interfaces/IBatchMultiplexFeature.sol";
 contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon, FixinReentrancyGuard {
     bytes4 private constant _VALIDATE_SELECTOR = BatchMultiplexValidator.validate.selector;
 
-    // TODO: remove as this is mock for validator setup and tests
-    address public immutable _validator;
-
     /// @inheritdoc IFeature
     string public constant override FEATURE_NAME = "BatchMultiplexFeature";
     /// @inheritdoc IFeature
@@ -60,18 +57,14 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
         _;
     }
 
-    constructor() public FixinCommon() {
-        // TODO: remove mock validator and deploy in tests pipeline.
-        _validator = address(new BatchMultiplexValidator());
-    }
+    constructor() public FixinCommon() {}
 
     /// @dev Initialize and register this feature.
     ///      Should be delegatecalled by `Migrate.migrate()`.
     /// @return success `LibMigrate.SUCCESS` on success.
     function migrate() external returns (bytes4 success) {
-        _registerFeatureFunction(bytes4(keccak256("batchMultiplex(bytes[])")));
-        _registerFeatureFunction(bytes4(keccak256("batchMultiplex(bytes[],bytes,address)")));
-        _registerFeatureFunction(bytes4(keccak256("batchMultiplex(bytes[],bytes,address,uint256)")));
+        _registerFeatureFunction(this.batchMultiplex.selector);
+        _registerFeatureFunction(this.batchMultiplexOptionalParams.selector);
         return LibMigrate.MIGRATE_SUCCESS;
     }
 
@@ -93,12 +86,7 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
             (bool success, bytes memory result) = address(this).delegatecall(data[i]);
 
             if (!success) {
-                // Next 5 lines from https://ethereum.stackexchange.com/a/83577
-                if (result.length < 68) revert();
-                assembly {
-                    result := add(result, 0x04)
-                }
-                revert(abi.decode(result, (string)));
+                _revertWithData(result);
             }
 
             results[i] = result;
@@ -106,34 +94,15 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
     }
 
     /// @inheritdoc IBatchMultiplexFeature
-    /// @notice Validator contract will assert validity of `extraData`.
-    function batchMultiplex(
-        bytes[] calldata data,
-        bytes calldata extraData,
-        address validatorAddress
-    )
-        external
-        payable
-        override
-        onlyDelegateCall
-        nonReentrant(REENTRANCY_BATCH_MULTIPLEX)
-        doesNotReduceEthBalance
-        refundsAttachedEth
-        returns (bytes[] memory results)
-    {
-        results = batchMultiplex(data, extraData, validatorAddress, ErrorHandling.REVERT);
-    }
-
-    /// @inheritdoc IBatchMultiplexFeature
     /// @notice This method should be used to get desired behavior STOP, REVERT, CONTINUE.
-    ///   Validator contract will assert validity of `extraData`.
-    function batchMultiplex(
+    ///   Validator contract will optionally assert validity of `extraData`.
+    function batchMultiplexOptionalParams(
         bytes[] calldata data,
         bytes calldata extraData,
         address validatorAddress,
         ErrorHandling errorType
     )
-        public
+        external
         payable
         override
         onlyDelegateCall
@@ -154,12 +123,7 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
 
             if (!success) {
                 if (errorType == ErrorHandling.REVERT) {
-                    // Next 5 lines from https://ethereum.stackexchange.com/a/83577
-                    if (result.length < 68) revert();
-                    assembly {
-                        result := add(result, 0x04)
-                    }
-                    revert(abi.decode(result, (string)));
+                    _revertWithData(result);
                 } else if (errorType == ErrorHandling.STOP) {
                     break;
                 } else if (errorType == ErrorHandling.CONTINUE) {
@@ -173,18 +137,22 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
         }
     }
 
+    /// @dev Revert with arbitrary bytes.
+    /// @param data Revert data.
+    /// @notice as in ZeroEx.sol _revertWithData private method
+    function _revertWithData(bytes memory data) private pure {
+        assembly {
+            revert(add(data, 32), mload(data))
+        }
+    }
+
     function _checkDelegateCall() private view {
         require(address(this) != _implementation, "Batch_M_Feat/DIRECT_CALL_ERROR");
     }
 
     /// @dev An internal validator method. Reverts if validation in the validator contract fails.
-    /// @notice We perform a staticcall to prevent reentrancy or other sorts of attacks by external contract, i.e. no
-    ///   state changes. However, this could be levied at a later stage. While the method is protected against internal
-    ///   state changes, nothing guarantees that the transaction is protected against frontrunning --> should not rely
-    ///   on this validation for onchain variables that can be manipulated, i.e. oracles or similar.
-    ///   This validation is used by clients that want to assert extra-conditions with their own validation logic,
-    ///   ensuring their interface processes transactions according to it. An example would be a backend EIP712-validate
-    ///   a batch, then return the signature to the client as extraData and use the verifier to assert validity.
+    /// @notice Used by clients that want to assert extra-conditions with their own validation logic,
+    ///   ensuring their interface processes transactions according to it.
     /// @param data The batch of 0x protocol transactions.
     /// @param extraData An arbitrary array of data to be validated.
     /// @param validatorAddress The address of the designated validator contract.
