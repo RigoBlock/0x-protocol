@@ -10,11 +10,7 @@ import { MetaTransaction, MetaTransactionFields } from '@0x/protocol-utils';
 import { BigNumber, hexUtils, StringRevertError, ZeroExRevertErrors } from '@0x/utils';
 import * as _ from 'lodash';
 
-import {
-    BatchMultiplexFeatureContract,
-    IZeroExContract,
-    MetaTransactionsFeatureContract
-} from '../../src/wrappers';
+import { BatchMultiplexFeatureContract, IZeroExContract, MetaTransactionsFeatureContract } from '../../src/wrappers';
 import { artifacts } from '../artifacts';
 import { abis } from '../utils/abis';
 import { fullMigrateAsync } from '../utils/migration';
@@ -76,12 +72,7 @@ blockchainTests.resets('BatchMultiplex feature', env => {
             nativeOrders: nativeOrdersFeature.address,
             batchMultiplex: batchMultiplexFeature.address,
         });
-        zeroEx = new IZeroExContract(
-            zeroEx.address,
-            env.provider,
-            { ...env.txDefaults, from: sender },
-            abis
-        );
+        zeroEx = new IZeroExContract(zeroEx.address, env.provider, { ...env.txDefaults, from: sender }, abis);
         metaTransactionsFeature = new MetaTransactionsFeatureContract(
             zeroEx.address,
             env.provider,
@@ -165,9 +156,11 @@ blockchainTests.resets('BatchMultiplex feature', env => {
                 value: mtx.value,
             };
 
-            const metaCallData = metaTransactionsFeature.executeMetaTransaction(mtx, signature).getABIEncodedTransactionData();
+            const metaCallData = metaTransactionsFeature
+                .executeMetaTransaction(mtx, signature)
+                .getABIEncodedTransactionData();
             const tx = batchMultiplexFeature.batchMultiplex([metaCallData]).awaitTransactionSuccessAsync(callOpts);
-            expect(tx).to.revertWith("Batch_M_Feat/DIRECT_CALL_ERROR");
+            expect(tx).to.revertWith('Batch_M_Feat/DIRECT_CALL_ERROR');
             const rawResult = await zeroEx.batchMultiplex([metaCallData]).callAsync(callOpts);
             expect(hexUtils.slice(rawResult[0], 64)).to.eq(RAW_ORDER_SUCCESS_RESULT);
             const receipt = await zeroEx.batchMultiplex([metaCallData]).awaitTransactionSuccessAsync(callOpts);
@@ -203,9 +196,11 @@ blockchainTests.resets('BatchMultiplex feature', env => {
                 gasPrice: mtx.minGasPrice,
                 value: 0,
             };
-            const metaCallData = metaTransactionsFeature.executeMetaTransaction(mtx, signature).getABIEncodedTransactionData();
+            const metaCallData = metaTransactionsFeature
+                .executeMetaTransaction(mtx, signature)
+                .getABIEncodedTransactionData();
             const tx = batchMultiplexFeature.batchMultiplex([metaCallData]).awaitTransactionSuccessAsync(callOpts);
-            expect(tx).to.revertWith("Batch_M_Feat/DIRECT_CALL_ERROR");
+            expect(tx).to.revertWith('Batch_M_Feat/DIRECT_CALL_ERROR');
             const rawResult = await zeroEx.batchMultiplex([metaCallData]).callAsync(callOpts);
             expect(hexUtils.slice(rawResult[0], 64)).to.eq(RAW_ORDER_SUCCESS_RESULT);
             const receipt = await zeroEx.batchMultiplex([metaCallData]).awaitTransactionSuccessAsync(callOpts);
@@ -245,9 +240,11 @@ blockchainTests.resets('BatchMultiplex feature', env => {
                 gasPrice: mtx.minGasPrice,
                 value: mtx.value,
             };
-            const metaCallData = metaTransactionsFeature.executeMetaTransaction(mtx, signature).getABIEncodedTransactionData();
+            const metaCallData = metaTransactionsFeature
+                .executeMetaTransaction(mtx, signature)
+                .getABIEncodedTransactionData();
             const tx = batchMultiplexFeature.batchMultiplex([metaCallData]).awaitTransactionSuccessAsync(callOpts);
-            expect(tx).to.revertWith("Batch_M_Feat/DIRECT_CALL_ERROR");
+            expect(tx).to.revertWith('Batch_M_Feat/DIRECT_CALL_ERROR');
             const rawResult = await zeroEx.batchMultiplex([metaCallData]).callAsync(callOpts);
             expect(hexUtils.slice(rawResult[0], 64)).to.eq(RAW_TRANSFORM_SUCCESS_RESULT);
             const receipt = await zeroEx.batchMultiplex([metaCallData]).awaitTransactionSuccessAsync(callOpts);
@@ -287,9 +284,11 @@ blockchainTests.resets('BatchMultiplex feature', env => {
                 gasPrice: mtx.minGasPrice,
                 value: mtx.value,
             };
-            const metaCallData = metaTransactionsFeature.executeMetaTransaction(mtx, signature).getABIEncodedTransactionData();
+            const metaCallData = metaTransactionsFeature
+                .executeMetaTransaction(mtx, signature)
+                .getABIEncodedTransactionData();
             const tx = batchMultiplexFeature.batchMultiplex([metaCallData]).awaitTransactionSuccessAsync(callOpts);
-            expect(tx).to.revertWith("Batch_M_Feat/DIRECT_CALL_ERROR");
+            expect(tx).to.revertWith('Batch_M_Feat/DIRECT_CALL_ERROR');
             const rawResult = await zeroEx.batchMultiplex([metaCallData]).callAsync(callOpts);
             expect(hexUtils.slice(rawResult[0], 64)).to.eq(RAW_TRANSFORM_SUCCESS_RESULT);
             const receipt = await zeroEx.batchMultiplex([metaCallData]).awaitTransactionSuccessAsync(callOpts);
@@ -332,7 +331,9 @@ blockchainTests.resets('BatchMultiplex feature', env => {
                 gasPrice: mtx.minGasPrice,
                 value: mtx.value,
             };
-            const metaCallData = metaTransactionsFeature.executeMetaTransaction(mtx, signature).getABIEncodedTransactionData();
+            const metaCallData = metaTransactionsFeature
+                .executeMetaTransaction(mtx, signature)
+                .getABIEncodedTransactionData();
             const tx = zeroEx.batchMultiplex([metaCallData]).callAsync(callOpts);
             const actualCallData = transformERC20Feature
                 ._transformERC20({
@@ -390,7 +391,9 @@ blockchainTests.resets('BatchMultiplex feature', env => {
                 gasPrice: mtx.minGasPrice,
                 value: mtx.value,
             };
-            const metaCallData = metaTransactionsFeature.executeMetaTransaction(mtx, signature).getABIEncodedTransactionData();
+            const metaCallData = metaTransactionsFeature
+                .executeMetaTransaction(mtx, signature)
+                .getABIEncodedTransactionData();
             const tx1 = zeroEx.batchMultiplex([metaCallData]).callAsync(callOpts);
             return expect(tx1).to.revertWith(
                 new ZeroExRevertErrors.MetaTransactions.MetaTransactionUnsupportedFunctionError(
@@ -433,8 +436,12 @@ blockchainTests.resets('BatchMultiplex feature', env => {
                 gasPrice: mtx.maxGasPrice,
                 value: mtx.value,
             };
-            const metaCallData = metaTransactionsFeature.executeMetaTransaction(mtx, signature).getABIEncodedTransactionData();
-            const encodedBatchTransaction = batchMultiplexFeature.batchMultiplex([metaCallData]).getABIEncodedTransactionData();
+            const metaCallData = metaTransactionsFeature
+                .executeMetaTransaction(mtx, signature)
+                .getABIEncodedTransactionData();
+            const encodedBatchTransaction = batchMultiplexFeature
+                .batchMultiplex([metaCallData])
+                .getABIEncodedTransactionData();
             const tx = zeroEx.batchMultiplex([encodedBatchTransaction]).callAsync(callOpts);
             return expect(tx).to.revertWith(
                 new ZeroExRevertErrors.Common.IllegalReentrancyError(
