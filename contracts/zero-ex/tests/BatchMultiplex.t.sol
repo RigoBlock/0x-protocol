@@ -7,13 +7,40 @@ import {LocalTest} from "utils/LocalTest.sol";
 import {MultiplexUtils} from "utils/MultiplexUtils.sol";
 import {LibCommonRichErrors} from "src/errors/LibCommonRichErrors.sol";
 import {LibOwnableRichErrors} from "src/errors/LibOwnableRichErrors.sol";
-import "src/examples/BatchMultiplexValidator.sol";
+import {BatchMultiplexValidator} from "src/examples/BatchMultiplexValidator.sol";
 import {LibSignature} from "src/features/libs/LibSignature.sol";
 import {LibNativeOrder} from "src/features/libs/LibNativeOrder.sol";
 import {IBatchMultiplexFeature} from "src/features/interfaces/IBatchMultiplexFeature.sol";
 import {IMetaTransactionsFeatureV2} from "src/features/interfaces/IMetaTransactionsFeatureV2.sol";
 
+interface IMockBM {
+    enum ErrorHandling {
+        REVERT,
+        STOP,
+        CONTINUE,
+        UNKNOWN
+    }
+
+    function batchMultiplexOptionalParams(
+        bytes[] calldata data,
+        bytes calldata extraData,
+        address validatorAddress,
+        ErrorHandling errorType
+    ) external payable returns (bytes[] memory results);
+}
+
 contract BatchMultiplex is LocalTest, MultiplexUtils {
+    event RfqOrderFilled(
+        bytes32 orderHash,
+        address maker,
+        address taker,
+        address makerToken,
+        address takerToken,
+        uint128 takerTokenFilledAmount,
+        uint128 makerTokenFilledAmount,
+        bytes32 pool
+    );
+
     address public immutable _validator;
 
     constructor() public {
@@ -175,5 +202,79 @@ contract BatchMultiplex is LocalTest, MultiplexUtils {
             address(0),
             IBatchMultiplexFeature.ErrorHandling.CONTINUE
         );
+    }
+
+    function test_batchMultiplexUnknownRevertError() external {
+        bytes[] memory callsArray = new bytes[](1);
+        callsArray[0] = abi.encodeWithSelector(
+            zeroExDeployed.zeroEx.extend.selector,
+            bytes4(keccak256("_extendSelf(bytes4,address)")),
+            address(1)
+        );
+        bytes memory mockBytes = callsArray[0];
+
+        bytes memory unknownRevertCalldata = abi.encodeWithSelector(
+            IBatchMultiplexFeature.batchMultiplexOptionalParams.selector,
+            callsArray,
+            mockBytes,
+            address(0),
+            IMockBM.ErrorHandling.UNKNOWN
+        );
+        vm.expectRevert();
+        (bool revertsAsExpected, ) = address(zeroExDeployed.zeroEx).call(unknownRevertCalldata);
+        assertTrue(revertsAsExpected, "expectRevert: call did not revert");
+
+        // TODO: not sure EVM returns the expected error when a different enum type is used, will not be
+        //  able to reproduce error in coverage
+        vm.expectRevert();
+        IMockBM(address(zeroExDeployed.zeroEx)).batchMultiplexOptionalParams(
+            callsArray,
+            mockBytes,
+            address(0),
+            IMockBM.ErrorHandling.UNKNOWN
+        );
+
+        vm.expectRevert(LibOwnableRichErrors.OnlyOwnerError(address(this), zeroExDeployed.zeroEx.owner()));
+        IMockBM(address(zeroExDeployed.zeroEx)).batchMultiplexOptionalParams(
+            callsArray,
+            mockBytes,
+            address(0),
+            IMockBM.ErrorHandling.REVERT
+        );
+    }
+
+    function test_batchMutiplexTransaction_batchMultiplex_rfqOrderFallbackUniswapV2() external {
+        LibNativeOrder.RfqOrder memory rfqOrder = _makeTestRfqOrder();
+        _createUniswapV2Pool(uniV2Factory, dai, zrx, 10e18, 10e18);
+        _mintTo(address(rfqOrder.takerToken), rfqOrder.taker, 10 * rfqOrder.takerAmount);
+
+        (bytes memory callData, LibSignature.Signature memory sig) = _makeRfqSubcallForBatch(
+            rfqOrder,
+            rfqOrder.takerAmount
+        );
+        _mintTo(address(dai), otherSignerAddress, 2e18);
+
+        bytes memory uniswapV2FallbackData = abi.encodeWithSelector(
+            zeroExDeployed.zeroEx.multiplexBatchSellTokenForToken.selector,
+            dai,
+            zrx,
+            _makeArray(_makeUniswapV2BatchSubcall(_makeArray(address(dai), address(zrx)), 2 * 1e18, false)),
+            1e18,
+            0
+        );
+
+        vm.expectEmit(true, true, true, true);
+        emit RfqOrderFilled(
+            zeroExDeployed.features.nativeOrdersFeature.getRfqOrderHash(rfqOrder),
+            rfqOrder.maker,
+            rfqOrder.taker,
+            address(rfqOrder.makerToken),
+            address(rfqOrder.takerToken),
+            rfqOrder.takerAmount,
+            rfqOrder.makerAmount,
+            rfqOrder.pool
+        );
+
+        _executeBatchMultiplexTransactions(_makeArray(callData, uniswapV2FallbackData));
     }
 }

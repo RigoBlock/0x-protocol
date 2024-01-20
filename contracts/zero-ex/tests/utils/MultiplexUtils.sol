@@ -24,6 +24,7 @@ import {IERC20Token} from "@0x/contracts-erc20/src/IERC20Token.sol";
 import {LibNativeOrder} from "src/features/libs/LibNativeOrder.sol";
 import {LibSignature} from "src/features/libs/LibSignature.sol";
 import {IMultiplexFeature} from "src/features/interfaces/IMultiplexFeature.sol";
+import {INativeOrdersFeature} from "src/features/interfaces/INativeOrdersFeature.sol";
 import {ITransformERC20Feature} from "src/features/interfaces/ITransformERC20Feature.sol";
 import {LocalTest} from "utils/LocalTest.sol";
 
@@ -87,6 +88,19 @@ contract MultiplexUtils is LocalTest {
         LibNativeOrder.RfqOrder memory order
     ) internal view returns (IMultiplexFeature.BatchSellSubcall memory) {
         return _makeRfqSubcall(order, order.takerAmount);
+    }
+
+    function _makeRfqSubcallForBatch(
+        LibNativeOrder.RfqOrder memory order,
+        uint256 sellAmount
+    ) internal view returns (bytes memory callData, LibSignature.Signature memory sig) {
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
+            signerKey,
+            zeroExDeployed.features.nativeOrdersFeature.getRfqOrderHash(order)
+        );
+        sig = LibSignature.Signature(LibSignature.SignatureType.EIP712, v, r, s);
+
+        callData = abi.encodeWithSelector(INativeOrdersFeature.fillRfqOrder.selector, order, sig, sellAmount);
     }
 
     function _makeOtcSubcall(
@@ -296,6 +310,17 @@ contract MultiplexUtils is LocalTest {
         addresses[0] = first;
         addresses[1] = second;
         addresses[2] = third;
+    }
+
+    function _makeArray(bytes memory first) internal pure returns (bytes[] memory calls) {
+        calls = new bytes[](1);
+        calls[0] = first;
+    }
+
+    function _makeArray(bytes memory first, bytes memory second) internal pure returns (bytes[] memory calls) {
+        calls = new bytes[](2);
+        calls[0] = first;
+        calls[1] = second;
     }
 
     function _encodeFractionalFillAmount(uint256 frac) internal pure returns (uint256) {
