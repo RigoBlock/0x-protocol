@@ -21,6 +21,7 @@ import {
     TestMetaTransactionsTransformERC20FeatureContract,
     TestMetaTransactionsTransformERC20FeatureEvents,
     TestMintableERC20TokenContract,
+    TestWethContract,
 } from '../wrappers';
 
 const { NULL_ADDRESS, ZERO_AMOUNT } = constants;
@@ -35,6 +36,7 @@ blockchainTests.resets('BatchMultiplex feature', env => {
     let metaTransactionsFeature: MetaTransactionsFeatureContract;
     let batchMultiplexFeature: BatchMultiplexFeatureContract;
     let feeToken: TestMintableERC20TokenContract;
+    let weth: TestWethContract;
     let transformERC20Feature: TestMetaTransactionsTransformERC20FeatureContract;
     let nativeOrdersFeature: TestMetaTransactionsNativeOrdersFeatureContract;
 
@@ -60,6 +62,12 @@ blockchainTests.resets('BatchMultiplex feature', env => {
             env.provider,
             env.txDefaults,
             {},
+        );
+        weth = await TestWethContract.deployFrom0xArtifactAsync(
+            artifacts.TestWeth,
+            env.provider,
+            env.txDefaults,
+            artifacts,
         );
         batchMultiplexFeature = await BatchMultiplexFeatureContract.deployFrom0xArtifactAsync(
             artifacts.BatchMultiplexFeature,

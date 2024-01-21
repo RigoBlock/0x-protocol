@@ -247,6 +247,7 @@ export async function deployFullFeaturesAsync(
                     provider,
                     txDefaults,
                     artifacts,
+                    _config.wethAddress,
                 )
             ).address,
     };
