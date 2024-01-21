@@ -65,7 +65,8 @@ blockchainTests.resets('BatchMultiplex feature', env => {
             artifacts.BatchMultiplexFeature,
             env.provider,
             env.txDefaults,
-            {},
+            artifacts,
+            weth.address,
         );
         zeroEx = await fullMigrateAsync(owner, env.provider, env.txDefaults, {
             transformERC20: transformERC20Feature.address,
