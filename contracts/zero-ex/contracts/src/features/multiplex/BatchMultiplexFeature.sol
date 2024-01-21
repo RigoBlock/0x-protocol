@@ -207,9 +207,16 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
             LibSignature.Signature memory signature,
             bytes memory callbackData
         ) = abi.decode(callData, (LibNFTOrder.ERC721Order, LibSignature.Signature, bytes));
-        return address(featureImplementation).delegatecall(
-            abi.encodeWithSelector(this._buyERC721.selector, sellOrder, signature, address(this).balance, callbackData)
-        );
+        return
+            address(featureImplementation).delegatecall(
+                abi.encodeWithSelector(
+                    this._buyERC721.selector,
+                    sellOrder,
+                    signature,
+                    address(this).balance,
+                    callbackData
+                )
+            );
     }
 
     struct BuyParams {
@@ -232,23 +239,22 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
             uint128 erc1155BuyAmount,
             bytes memory callbackData
         ) = abi.decode(callData, (LibNFTOrder.ERC1155Order, LibSignature.Signature, uint128, bytes));
-        return address(featureImplementation).delegatecall(
-            abi.encodeWithSelector(
-                this._buyERC1155.selector,
-                sellOrder,
-                signature,
-                BuyParams(erc1155BuyAmount, address(this).balance, callbackData)
-            )
-        );
+        return
+            address(featureImplementation).delegatecall(
+                abi.encodeWithSelector(
+                    this._buyERC1155.selector,
+                    sellOrder,
+                    signature,
+                    BuyParams(erc1155BuyAmount, address(this).balance, callbackData)
+                )
+            );
     }
 
     /// @dev Execute a `ILiquidityProviderFeature.sellToLiquidityProvider()` call
     ///      by decoding the call args and translating the call to the external
     ///      `ILiquidityProviderFeature.sellToLiquidityProvider()` variant, with msg.sender
     ///      as the recipient and can attach Eth value to the call.
-    function _executeLiquidityProviderCall(
-        bytes memory callData
-    ) private returns (bool, bytes memory) {
+    function _executeLiquidityProviderCall(bytes memory callData) private returns (bool, bytes memory) {
         bytes memory args = _extractArgumentsFromCallData(callData);
 
         (
@@ -294,9 +300,7 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
     ///      by decoding the call args and translating the call to the internal
     ///      `ITransformERC20Feature._transformERC20()` variant, where we can override
     ///      the taker address.
-    function _executeTransformERC20Call(
-        bytes memory callData
-    ) private returns (bool, bytes memory) {
+    function _executeTransformERC20Call(bytes memory callData) private returns (bool, bytes memory) {
         // HACK(dorothy-zbornak): `abi.decode()` with the individual args
         // will cause a stack overflow. But we can prefix the call data with an
         // offset to transform it into the encoding for the equivalent single struct arg,
