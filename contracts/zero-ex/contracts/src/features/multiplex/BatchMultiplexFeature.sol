@@ -192,20 +192,17 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
     ///      by decoding the call args and translating the call to the external
     ///      `ILiquidityProviderFeature.sellToLiquidityProvider()` variant, with msg.sender
     ///      as the recipient and can attach Eth value to the call.
-    function _executeERC721BuyCall(bytes memory callData, address featureImplementation) private returns (bool success, bytes memory returnResult) {
+    function _executeERC721BuyCall(
+        bytes memory callData,
+        address featureImplementation
+    ) private returns (bool success, bytes memory returnResult) {
         (
             LibNFTOrder.ERC721Order memory sellOrder,
             LibSignature.Signature memory signature,
             bytes memory callbackData
         ) = abi.decode(callData, (LibNFTOrder.ERC721Order, LibSignature.Signature, bytes));
         (success, returnResult) = address(featureImplementation).delegatecall(
-            abi.encodeWithSelector(
-                this._buyERC721.selector,
-                sellOrder,
-                signature,
-                address(this).balance,
-                callData
-            )
+            abi.encodeWithSelector(this._buyERC721.selector, sellOrder, signature, address(this).balance, callbackData)
         );
     }
 
@@ -219,7 +216,10 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
     ///      by decoding the call args and translating the call to the external
     ///      `ILiquidityProviderFeature.sellToLiquidityProvider()` variant, with msg.sender
     ///      as the recipient and can attach Eth value to the call.
-    function _executeERC1155BuyCall(bytes memory callData, address featureImplementation) private returns (bool success, bytes memory returnResult) {
+    function _executeERC1155BuyCall(
+        bytes memory callData,
+        address featureImplementation
+    ) private returns (bool success, bytes memory returnResult) {
         (
             LibNFTOrder.ERC1155Order memory sellOrder,
             LibSignature.Signature memory signature,
@@ -240,7 +240,9 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
     ///      by decoding the call args and translating the call to the external
     ///      `ILiquidityProviderFeature.sellToLiquidityProvider()` variant, with msg.sender
     ///      as the recipient and can attach Eth value to the call.
-    function _executeLiquidityProviderCall(bytes memory callData) private returns (bool success, bytes memory returnResult) {
+    function _executeLiquidityProviderCall(
+        bytes memory callData
+    ) private returns (bool success, bytes memory returnResult) {
         bytes memory args = _extractArgumentsFromCallData(callData);
 
         (
@@ -251,28 +253,25 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
             uint256 sellAmount,
             uint256 minBuyAmount,
             bytes memory auxiliaryData
-
-        ) = abi.decode(
-            args,
-            (IERC20Token, IERC20Token, ILiquidityProvider, address, uint256, uint256, bytes)
-        );
+        ) = abi.decode(args, (IERC20Token, IERC20Token, ILiquidityProvider, address, uint256, uint256, bytes));
 
         // delegatecall to self if ERC20 to ERC20/ETH swap, call with value if ETH to ERC20/ETH
         if (!LibERC20Transformer.isTokenETH(inputToken)) {
             return address(this).delegatecall(callData);
         } else {
-            return address(this).call{value: LibERC20Transformer.isTokenETH(inputToken) ? sellAmount : 0}(
-                abi.encodeWithSelector(
-                    ILiquidityProviderFeature.sellToLiquidityProvider.selector,
-                    inputToken,
-                    outputToken,
-                    provider,
-                    recipient,
-                    sellAmount,
-                    minBuyAmount,
-                    auxiliaryData
-                )
-            );
+            return
+                address(this).call{value: LibERC20Transformer.isTokenETH(inputToken) ? sellAmount : 0}(
+                    abi.encodeWithSelector(
+                        ILiquidityProviderFeature.sellToLiquidityProvider.selector,
+                        inputToken,
+                        outputToken,
+                        provider,
+                        recipient,
+                        sellAmount,
+                        minBuyAmount,
+                        auxiliaryData
+                    )
+                );
         }
     }
 
@@ -289,7 +288,9 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
     ///      by decoding the call args and translating the call to the internal
     ///      `ITransformERC20Feature._transformERC20()` variant, where we can override
     ///      the taker address.
-    function _executeTransformERC20Call(bytes memory callData) private returns (bool success, bytes memory returnResult) {
+    function _executeTransformERC20Call(
+        bytes memory callData
+    ) private returns (bool success, bytes memory returnResult) {
         // HACK(dorothy-zbornak): `abi.decode()` with the individual args
         // will cause a stack overflow. But we can prefix the call data with an
         // offset to transform it into the encoding for the equivalent single struct arg,
@@ -340,21 +341,22 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
             args = abi.decode(encodedStructArgs, (ExternalTransformERC20Args));
         }
         // Call `ITransformERC20Feature._transformERC20()` (internal variant).
-        return address(this).call{value: LibERC20Transformer.isTokenETH(args.inputToken) ? args.inputTokenAmount : 0}(
-            abi.encodeWithSelector(
-                ITransformERC20Feature._transformERC20.selector,
-                ITransformERC20Feature.TransformERC20Args({
-                    taker: msg.sender,
-                    inputToken: args.inputToken,
-                    outputToken: args.outputToken,
-                    inputTokenAmount: args.inputTokenAmount,
-                    minOutputTokenAmount: args.minOutputTokenAmount,
-                    transformations: args.transformations,
-                    useSelfBalance: false,
-                    recipient: msg.sender
-                })
-            )
-        );
+        return
+            address(this).call{value: LibERC20Transformer.isTokenETH(args.inputToken) ? args.inputTokenAmount : 0}(
+                abi.encodeWithSelector(
+                    ITransformERC20Feature._transformERC20.selector,
+                    ITransformERC20Feature.TransformERC20Args({
+                        taker: msg.sender,
+                        inputToken: args.inputToken,
+                        outputToken: args.outputToken,
+                        inputTokenAmount: args.inputTokenAmount,
+                        minOutputTokenAmount: args.minOutputTokenAmount,
+                        transformations: args.transformations,
+                        useSelfBalance: false,
+                        recipient: msg.sender
+                    })
+                )
+            );
     }
 
     /// @dev Extract arguments from call data by copying everything after the
@@ -378,10 +380,7 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
 
     /// @dev Registers the non-supported methods or those that require re-routing.
     function _registerCustomMethods() private {
-        (
-            LibBatchMultiplexStorage.Storage storage stor,
-            LibProxyStorage.Storage storage proxyStor
-        ) = _getStorages();
+        (LibBatchMultiplexStorage.Storage storage stor, LibProxyStorage.Storage storage proxyStor) = _getStorages();
 
         // initialize only at migration
         if (!stor.blacklistedMethodBySelector[IMultiplexFeature.multiplexBatchSellEthForToken.selector]) {
@@ -394,14 +393,18 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
             stor.blacklistedMethodBySelector[IERC1155OrdersFeature.batchBuyERC1155s.selector] = true;
 
             // register methods that require special handling
-            stor.routeAddressBySelector[ILiquidityProviderFeature.sellToLiquidityProvider.selector] =
-                proxyStor.impls[ILiquidityProviderFeature.sellToLiquidityProvider.selector];
-            stor.routeAddressBySelector[ITransformERC20Feature.transformERC20.selector] =
-                proxyStor.impls[ITransformERC20Feature.transformERC20.selector];
-            stor.routeAddressBySelector[IERC721OrdersFeature.buyERC721.selector] =
-                proxyStor.impls[IERC721OrdersFeature.buyERC721.selector];
-            stor.routeAddressBySelector[IERC1155OrdersFeature.buyERC1155.selector] =
-                proxyStor.impls[IERC1155OrdersFeature.buyERC1155.selector];
+            stor.routeAddressBySelector[ILiquidityProviderFeature.sellToLiquidityProvider.selector] = proxyStor.impls[
+                ILiquidityProviderFeature.sellToLiquidityProvider.selector
+            ];
+            stor.routeAddressBySelector[ITransformERC20Feature.transformERC20.selector] = proxyStor.impls[
+                ITransformERC20Feature.transformERC20.selector
+            ];
+            stor.routeAddressBySelector[IERC721OrdersFeature.buyERC721.selector] = proxyStor.impls[
+                IERC721OrdersFeature.buyERC721.selector
+            ];
+            stor.routeAddressBySelector[IERC1155OrdersFeature.buyERC1155.selector] = proxyStor.impls[
+                IERC1155OrdersFeature.buyERC1155.selector
+            ];
         }
     }
 
@@ -459,16 +462,8 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
     }
 
     /// @dev A virtual method to retrieve method selector for routing to implementation.
-    function _buyERC721(
-        LibNFTOrder.ERC721Order memory,
-        LibSignature.Signature memory,
-        bytes memory
-    ) public {}
+    function _buyERC721(LibNFTOrder.ERC721Order memory, LibSignature.Signature memory, bytes memory) public {}
 
     /// @dev A virtual method to retrieve method selector for routing to implementation.
-    function _buyERC1155(
-        LibNFTOrder.ERC721Order memory,
-        LibSignature.Signature memory,
-        BuyParams memory
-    ) public {}
+    function _buyERC1155(LibNFTOrder.ERC721Order memory, LibSignature.Signature memory, BuyParams memory) public {}
 }
