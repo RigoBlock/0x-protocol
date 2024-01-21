@@ -22,9 +22,9 @@ library LibBatchMultiplexStorage {
     /// @dev Storage bucket for this feature.
     struct Storage {
         // Mapping of function selector -> blocked method.
-        mapping(bytes4 => bool) blacklistedMethodBySelector;
+        mapping(bytes4 => bool) blacklistedMethod;
         // Mapping of function selector -> implementation address.
-        mapping(bytes4 => address) routeAddressBySelector;
+        mapping(bytes4 => bool) requiresRouting;
     }
 
     /// @dev Get the storage bucket for this contract.

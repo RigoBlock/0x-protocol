@@ -66,7 +66,6 @@ blockchainTests.resets('Full migration', env => {
         return expect(tx).to.revertWith('FullMigration/INVALID_SENDER');
     });
 
-    // TODO: add batchMultiplex methods, selector is f(params)
     const FEATURE_FNS = {
         TransformERC20: {
             contractType: ITransformERC20FeatureContract,

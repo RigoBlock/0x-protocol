@@ -32,9 +32,13 @@ import "../interfaces/IBatchMultiplexFeature.sol";
 import "../interfaces/IERC721OrdersFeature.sol";
 import "../interfaces/IERC1155OrdersFeature.sol";
 import "../interfaces/ILiquidityProviderFeature.sol";
+import "../interfaces/IMetaTransactionsFeature.sol";
+import "../interfaces/IMetaTransactionsFeatureV2.sol";
 import "../interfaces/IMultiplexFeature.sol";
+import "../interfaces/IPancakeSwapFeature.sol";
 import "../interfaces/IOtcOrdersFeature.sol";
 import "../interfaces/ITransformERC20Feature.sol";
+import "../interfaces/IUniswapFeature.sol";
 import "../interfaces/IUniswapV3Feature.sol";
 
 /// @dev This feature enables batch transactions by re-routing the single swaps to the exchange proxy.
@@ -171,10 +175,10 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
 
     function _dispatch(bytes memory data) private returns (bool, bytes memory) {
         bytes4 selector = data.readBytes4(0);
-        LibBatchMultiplexStorage.Storage storage stor = LibBatchMultiplexStorage.getStorage();
+        (LibBatchMultiplexStorage.Storage storage stor, LibProxyStorage.Storage storage proxyStor) = _getStorages();
 
-        if (!stor.blacklistedMethodBySelector[selector]) {
-            if (stor.routeAddressBySelector[selector] == address(0)) {
+        if (!stor.blacklistedMethod[selector]) {
+            if (!stor.requiresRouting[selector]) {
                 return address(this).delegatecall(data);
             } else {
                 if (selector == ITransformERC20Feature.transformERC20.selector) {
@@ -182,9 +186,9 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
                 } else if (selector == ILiquidityProviderFeature.sellToLiquidityProvider.selector) {
                     return _executeLiquidityProviderCall(data);
                 } else if (selector == IERC721OrdersFeature.buyERC721.selector) {
-                    return _executeERC721BuyCall(data, stor.routeAddressBySelector[selector]);
+                    return _executeERC721BuyCall(data, proxyStor.impls[selector]);
                 } else if (selector == IERC1155OrdersFeature.buyERC1155.selector) {
-                    return _executeERC1155BuyCall(data, stor.routeAddressBySelector[selector]);
+                    return _executeERC1155BuyCall(data, proxyStor.impls[selector]);
                 } else {
                     revert("Batch_M_Feat/NOT_SUPPORTED");
                 }
@@ -390,31 +394,33 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
 
     /// @dev Registers the non-supported methods or those that require re-routing.
     function _registerCustomMethods() private {
-        (LibBatchMultiplexStorage.Storage storage stor, LibProxyStorage.Storage storage proxyStor) = _getStorages();
+        LibBatchMultiplexStorage.Storage storage stor = LibBatchMultiplexStorage.getStorage();
 
-        // initialize only at migration
-        if (!stor.blacklistedMethodBySelector[IMultiplexFeature.multiplexBatchSellEthForToken.selector]) {
+        // initialize only at migration. When upgrading the feature, the previous feature's storage will
+        //  be preserved and requires overwrite.
+        if (!stor.blacklistedMethod[IMultiplexFeature.multiplexBatchSellEthForToken.selector]) {
             // register non-supported methods
-            stor.blacklistedMethodBySelector[IMultiplexFeature.multiplexBatchSellEthForToken.selector] = true;
-            stor.blacklistedMethodBySelector[IMultiplexFeature.multiplexMultiHopSellEthForToken.selector] = true;
-            stor.blacklistedMethodBySelector[IOtcOrdersFeature.fillOtcOrderWithEth.selector] = true;
-            stor.blacklistedMethodBySelector[IUniswapV3Feature.sellEthForTokenToUniswapV3.selector] = true;
-            stor.blacklistedMethodBySelector[IERC721OrdersFeature.batchBuyERC721s.selector] = true;
-            stor.blacklistedMethodBySelector[IERC1155OrdersFeature.batchBuyERC1155s.selector] = true;
+            stor.blacklistedMethod[IMultiplexFeature.multiplexBatchSellEthForToken.selector] = true;
+            stor.blacklistedMethod[IMultiplexFeature.multiplexMultiHopSellEthForToken.selector] = true;
+            // TODO: fillOrcOrderWithEth can use EP balance, should allow method
+            stor.blacklistedMethod[IOtcOrdersFeature.fillOtcOrderWithEth.selector] = true;
+            stor.blacklistedMethod[IUniswapV3Feature.sellEthForTokenToUniswapV3.selector] = true;
+            stor.blacklistedMethod[IERC721OrdersFeature.batchBuyERC721s.selector] = true;
+            stor.blacklistedMethod[IERC1155OrdersFeature.batchBuyERC1155s.selector] = true;
+            // TODO: check if we want to blacklist meta transactions
+            //stor.blacklistedMethod[IMetaTransactionsFeatureV2.executeMetaTransactionV2.selector] = true;
+            stor.blacklistedMethod[IMetaTransactionsFeatureV2.batchExecuteMetaTransactionsV2.selector] = true;
 
             // register methods that require special handling
-            stor.routeAddressBySelector[ILiquidityProviderFeature.sellToLiquidityProvider.selector] = proxyStor.impls[
-                ILiquidityProviderFeature.sellToLiquidityProvider.selector
-            ];
-            stor.routeAddressBySelector[ITransformERC20Feature.transformERC20.selector] = proxyStor.impls[
-                ITransformERC20Feature.transformERC20.selector
-            ];
-            stor.routeAddressBySelector[IERC721OrdersFeature.buyERC721.selector] = proxyStor.impls[
-                IERC721OrdersFeature.buyERC721.selector
-            ];
-            stor.routeAddressBySelector[IERC1155OrdersFeature.buyERC1155.selector] = proxyStor.impls[
-                IERC1155OrdersFeature.buyERC1155.selector
-            ];
+            stor.requiresRouting[ILiquidityProviderFeature.sellToLiquidityProvider.selector] = true;
+            stor.requiresRouting[ITransformERC20Feature.transformERC20.selector] = true;
+            stor.requiresRouting[IERC721OrdersFeature.buyERC721.selector] = true;
+            stor.requiresRouting[IERC1155OrdersFeature.buyERC1155.selector] = true;
+            // TODO: check if we want to blacklist meta transactions, commented as one test is using it
+            //stor.requiresRouting[IMetaTransactionsFeature.executeMetaTransaction.selector] = true;
+            stor.requiresRouting[IMetaTransactionsFeature.batchExecuteMetaTransactions.selector] = true;
+            stor.requiresRouting[IPancakeSwapFeature.sellToPancakeSwap.selector] = true;
+            stor.requiresRouting[IUniswapFeature.sellToUniswap.selector] = true;
         }
     }
 
