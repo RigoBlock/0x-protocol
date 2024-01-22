@@ -182,6 +182,12 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
         emit SelectorStatusUpdated(selectorsTuple);
     }
 
+    /// @dev A virtual method to retrieve method selector for routing to implementation.
+    function _buyERC721(LibNFTOrder.ERC721Order memory, LibSignature.Signature memory, bytes memory) public {}
+
+    /// @dev A virtual method to retrieve method selector for routing to implementation.
+    function _buyERC1155(LibNFTOrder.ERC721Order memory, LibSignature.Signature memory, BuyParams memory) public {}
+
     /// @inheritdoc IBatchMultiplexFeature
     function getSelectorStatus(
         bytes4 selector
@@ -469,15 +475,6 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
             .RequiresRouting;
     }
 
-    /// @dev Revert with arbitrary bytes.
-    /// @param data Revert data.
-    /// @notice as in ZeroEx.sol _revertWithData private method
-    function _revertWithData(bytes memory data) private pure {
-        assembly {
-            revert(add(data, 32), mload(data))
-        }
-    }
-
     function _unwrapWethLeftover() private {
         uint256 wethBalance = WETH.balanceOf(address(this));
         if (wethBalance > 0) {
@@ -489,15 +486,12 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
         require(address(this) != _implementation, "Batch_M_Feat/DIRECT_CALL_ERROR");
     }
 
-    /// @dev Get the storage buckets for this feature and the proxy.
-    /// @return stor Storage bucket for this feature.
-    /// @return proxyStor age bucket for the proxy.
-    function _getStorages()
-        private
-        pure
-        returns (LibBatchMultiplexStorage.Storage storage stor, LibProxyStorage.Storage storage proxyStor)
-    {
-        return (LibBatchMultiplexStorage.getStorage(), LibProxyStorage.getStorage());
+    function _isContract(address target) private view returns (bool) {
+        uint256 size;
+        assembly {
+            size := extcodesize(target)
+        }
+        return size != 0;
     }
 
     /// @dev An internal validator method. Reverts if validation in the validator contract fails.
@@ -521,17 +515,23 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
         return _VALIDATE_SELECTOR;
     }
 
-    function _isContract(address target) private view returns (bool) {
-        uint256 size;
-        assembly {
-            size := extcodesize(target)
-        }
-        return size != 0;
+    /// @dev Get the storage buckets for this feature and the proxy.
+    /// @return stor Storage bucket for this feature.
+    /// @return proxyStor age bucket for the proxy.
+    function _getStorages()
+        private
+        pure
+        returns (LibBatchMultiplexStorage.Storage storage stor, LibProxyStorage.Storage storage proxyStor)
+    {
+        return (LibBatchMultiplexStorage.getStorage(), LibProxyStorage.getStorage());
     }
 
-    /// @dev A virtual method to retrieve method selector for routing to implementation.
-    function _buyERC721(LibNFTOrder.ERC721Order memory, LibSignature.Signature memory, bytes memory) public {}
-
-    /// @dev A virtual method to retrieve method selector for routing to implementation.
-    function _buyERC1155(LibNFTOrder.ERC721Order memory, LibSignature.Signature memory, BuyParams memory) public {}
+    /// @dev Revert with arbitrary bytes.
+    /// @param data Revert data.
+    /// @notice as in ZeroEx.sol _revertWithData private method
+    function _revertWithData(bytes memory data) private pure {
+        assembly {
+            revert(add(data, 32), mload(data))
+        }
+    }
 }
