@@ -19,12 +19,19 @@ import "./LibStorage.sol";
 
 /// @dev Storage helpers for `BatchMultiplexFeature`.
 library LibBatchMultiplexStorage {
+    enum SelectorStatus {
+        // Default.
+        Whitelisted,
+        // Whether an EP method is not allowed in this feature.
+        Blacklisted,
+        // Whether an EP method requires special handling.
+        RequiresRouting
+    }
+
     /// @dev Storage bucket for this feature.
     struct Storage {
-        // Mapping of function selector -> blocked method.
-        mapping(bytes4 => bool) blacklistedMethod;
-        // Mapping of function selector -> implementation address.
-        mapping(bytes4 => bool) requiresRouting;
+        // Mapping of function selector -> bool restricted.
+        mapping(bytes4 => SelectorStatus) statusBySelectors;
     }
 
     /// @dev Get the storage bucket for this contract.

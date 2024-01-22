@@ -15,7 +15,20 @@
 pragma solidity ^0.6.5;
 pragma experimental ABIEncoderV2;
 
+import "../../storage/LibBatchMultiplexStorage.sol";
+
 interface IBatchMultiplexFeature {
+    struct UpdateSelectorStatus {
+        // The selector of the function call.
+        bytes4 selector;
+        // The status of the selector.
+        LibBatchMultiplexStorage.SelectorStatus status;
+    }
+
+    /// @dev Emitted whenever the owner updates the selectors' status.
+    /// @param status Array of tuples of selectors and status (Whitelisted, Blacklisted, RequiresRouting).
+    event SelectorStatusUpdated(UpdateSelectorStatus[] status);
+
     enum ErrorHandling {
         REVERT,
         STOP,
@@ -40,4 +53,12 @@ interface IBatchMultiplexFeature {
         address validatorAddress,
         ErrorHandling errorType
     ) external payable returns (bytes[] memory results);
+
+    /// @dev A method to update the batch multiplex storage slot. It is restricted to the EP owner.
+    /// @param selectorsTuple Array of tuples of selector and selector status.
+    function updateSelectorsStatus(UpdateSelectorStatus[] calldata selectorsTuple) external;
+
+    /// @dev A public method to query whether a method is restricted.
+    /// @notice Can be used by batchMultiplex for querying status of multiple selectors.
+    function getSelectorStatus(bytes4) external view returns (LibBatchMultiplexStorage.SelectorStatus selectorStatus);
 }

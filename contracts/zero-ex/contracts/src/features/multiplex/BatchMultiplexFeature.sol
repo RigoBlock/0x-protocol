@@ -51,7 +51,7 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
     uint256 public immutable override FEATURE_VERSION = _encodeVersion(1, 0, 0);
 
     /// @dev The wrapped Ether token contract.
-    IEtherToken private immutable _weth;
+    IEtherToken private immutable WETH;
 
     /// @dev Refunds up to `msg.value` leftover ETH at the end of the call.
     modifier refundsAttachedEth() {
@@ -79,15 +79,20 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
     }
 
     constructor(IEtherToken weth) public FixinCommon() {
-        _weth = weth;
+        WETH = weth;
     }
 
+    // TODO: this method can be called by anyone in the implementation, check if should be delegatecall restricted.
     /// @dev Initialize and register this feature.
     ///      Should be delegatecalled by `Migrate.migrate()`.
     /// @return success `LibMigrate.SUCCESS` on success.
     function migrate() external returns (bytes4 success) {
         _registerFeatureFunction(this.batchMultiplex.selector);
         _registerFeatureFunction(this.batchMultiplexOptionalParams.selector);
+        _registerFeatureFunction(this.updateSelectorsStatus.selector);
+        _registerFeatureFunction(this.getSelectorStatus.selector);
+
+        // Initialize storage with restricted methods.
         _registerCustomMethods();
         return LibMigrate.MIGRATE_SUCCESS;
     }
@@ -117,10 +122,7 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
         }
 
         // unwrap any WETH leftover
-        uint256 wethBalance = _weth.balanceOf(address(this));
-        if (wethBalance > 0) {
-            _weth.withdraw(_weth.balanceOf(address(this)));
-        }
+        _unwrapWethLeftover();
     }
 
     /// @inheritdoc IBatchMultiplexFeature
@@ -167,34 +169,43 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
         }
 
         // unwrap any WETH leftover
-        uint256 wethBalance = _weth.balanceOf(address(this));
-        if (wethBalance > 0) {
-            _weth.withdraw(_weth.balanceOf(address(this)));
+        _unwrapWethLeftover();
+    }
+
+    /// @inheritdoc IBatchMultiplexFeature
+    function updateSelectorsStatus(UpdateSelectorStatus[] memory selectorsTuple) external override onlyOwner {
+        for (uint i = 0; i < selectorsTuple.length; i++) {
+            LibBatchMultiplexStorage.getStorage().statusBySelectors[selectorsTuple[i].selector] = selectorsTuple[i].status;
         }
+
+        emit SelectorStatusUpdated(selectorsTuple);
+    }
+
+    /// @inheritdoc IBatchMultiplexFeature
+    function getSelectorStatus(bytes4 selector) external view override returns (LibBatchMultiplexStorage.SelectorStatus selectorStatus) {
+        return LibBatchMultiplexStorage.getStorage().statusBySelectors[selector];
     }
 
     function _dispatch(bytes memory data) private returns (bool, bytes memory) {
         bytes4 selector = data.readBytes4(0);
         (LibBatchMultiplexStorage.Storage storage stor, LibProxyStorage.Storage storage proxyStor) = _getStorages();
 
-        if (!stor.blacklistedMethod[selector]) {
-            if (!stor.requiresRouting[selector]) {
-                return address(this).delegatecall(data);
+        if (stor.statusBySelectors[selector] == LibBatchMultiplexStorage.SelectorStatus.Blacklisted) {
+            revert("Batch_M_Feat/BLACKLISTED");
+        } else if (stor.statusBySelectors[selector] == LibBatchMultiplexStorage.SelectorStatus.RequiresRouting) {
+            if (selector == ITransformERC20Feature.transformERC20.selector) {
+                return _executeTransformERC20Call(data);
+            } else if (selector == ILiquidityProviderFeature.sellToLiquidityProvider.selector) {
+                return _executeLiquidityProviderCall(data);
+            } else if (selector == IERC721OrdersFeature.buyERC721.selector) {
+                return _executeERC721BuyCall(data, proxyStor.impls[selector]);
+            } else if (selector == IERC1155OrdersFeature.buyERC1155.selector) {
+                return _executeERC1155BuyCall(data, proxyStor.impls[selector]);
             } else {
-                if (selector == ITransformERC20Feature.transformERC20.selector) {
-                    return _executeTransformERC20Call(data);
-                } else if (selector == ILiquidityProviderFeature.sellToLiquidityProvider.selector) {
-                    return _executeLiquidityProviderCall(data);
-                } else if (selector == IERC721OrdersFeature.buyERC721.selector) {
-                    return _executeERC721BuyCall(data, proxyStor.impls[selector]);
-                } else if (selector == IERC1155OrdersFeature.buyERC1155.selector) {
-                    return _executeERC1155BuyCall(data, proxyStor.impls[selector]);
-                } else {
-                    revert("Batch_M_Feat/NOT_SUPPORTED");
-                }
+                revert("Batch_M_Feat/NOT_SUPPORTED");
             }
         } else {
-            revert("Batch_M_Feat/NOT_SUPPORTED");
+            return address(this).delegatecall(data);
         }
     }
 
@@ -393,35 +404,50 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
     }
 
     /// @dev Registers the non-supported methods or those that require re-routing.
+    /// @notice When feature is upgraded, the RP storage slot is not preserved. External method
+    ///   `updateSelectorsStatus` allows owner to change status of previously registered
+    ///   methods, should the new feature forget to update storage in this private method.
     function _registerCustomMethods() private {
         LibBatchMultiplexStorage.Storage storage stor = LibBatchMultiplexStorage.getStorage();
 
-        // initialize only at migration. When upgrading the feature, the previous feature's storage will
-        //  be preserved and requires overwrite.
-        if (!stor.blacklistedMethod[IMultiplexFeature.multiplexBatchSellEthForToken.selector]) {
-            // register non-supported methods
-            stor.blacklistedMethod[IMultiplexFeature.multiplexBatchSellEthForToken.selector] = true;
-            stor.blacklistedMethod[IMultiplexFeature.multiplexMultiHopSellEthForToken.selector] = true;
-            // TODO: fillOrcOrderWithEth can use EP balance, should allow method
-            stor.blacklistedMethod[IOtcOrdersFeature.fillOtcOrderWithEth.selector] = true;
-            stor.blacklistedMethod[IUniswapV3Feature.sellEthForTokenToUniswapV3.selector] = true;
-            stor.blacklistedMethod[IERC721OrdersFeature.batchBuyERC721s.selector] = true;
-            stor.blacklistedMethod[IERC1155OrdersFeature.batchBuyERC1155s.selector] = true;
-            // TODO: check if we want to blacklist meta transactions
-            //stor.blacklistedMethod[IMetaTransactionsFeatureV2.executeMetaTransactionV2.selector] = true;
-            stor.blacklistedMethod[IMetaTransactionsFeatureV2.batchExecuteMetaTransactionsV2.selector] = true;
+        // register non-supported methods
+        // TODO: uncomment executeMetaTransactionV2 after tests update
+        //stor.statusBySelectors[IMetaTransactionsFeatureV2.executeMetaTransactionV2.selector] =
+        //    LibBatchMultiplexStorage.SelectorStatus.Blacklisted;
+        stor.statusBySelectors[IMetaTransactionsFeatureV2.batchExecuteMetaTransactionsV2.selector] =
+            LibBatchMultiplexStorage.SelectorStatus.Blacklisted;
+        // meta transactions (v1) methods are payable and will require handling if supported in the future.
+        // TODO: uncomment executeMetaTransaction after tests update
+        //stor.statusBySelectors[IMetaTransactionsFeature.executeMetaTransaction.selector] =
+        //    LibBatchMultiplexStorage.SelectorStatus.Blacklisted;
+        stor.statusBySelectors[IMetaTransactionsFeature.batchExecuteMetaTransactions.selector] =
+            LibBatchMultiplexStorage.SelectorStatus.Blacklisted;
+        stor.statusBySelectors[IERC721OrdersFeature.batchBuyERC721s.selector] =
+            LibBatchMultiplexStorage.SelectorStatus.Blacklisted;
+        stor.statusBySelectors[IERC1155OrdersFeature.batchBuyERC1155s.selector] =
+            LibBatchMultiplexStorage.SelectorStatus.Blacklisted;
+        stor.statusBySelectors[IMultiplexFeature.multiplexBatchSellEthForToken.selector] =
+            LibBatchMultiplexStorage.SelectorStatus.Blacklisted;
+        stor.statusBySelectors[IMultiplexFeature.multiplexMultiHopSellEthForToken.selector] =
+            LibBatchMultiplexStorage.SelectorStatus.Blacklisted;
+        stor.statusBySelectors[IOtcOrdersFeature.fillOtcOrderWithEth.selector] =
+            LibBatchMultiplexStorage.SelectorStatus.Blacklisted;
+        stor.statusBySelectors[IUniswapV3Feature.sellEthForTokenToUniswapV3.selector] =
+            LibBatchMultiplexStorage.SelectorStatus.Blacklisted;
 
-            // register methods that require special handling
-            stor.requiresRouting[ILiquidityProviderFeature.sellToLiquidityProvider.selector] = true;
-            stor.requiresRouting[ITransformERC20Feature.transformERC20.selector] = true;
-            stor.requiresRouting[IERC721OrdersFeature.buyERC721.selector] = true;
-            stor.requiresRouting[IERC1155OrdersFeature.buyERC1155.selector] = true;
-            // TODO: check if we want to blacklist meta transactions, commented as one test is using it
-            //stor.requiresRouting[IMetaTransactionsFeature.executeMetaTransaction.selector] = true;
-            stor.requiresRouting[IMetaTransactionsFeature.batchExecuteMetaTransactions.selector] = true;
-            stor.requiresRouting[IPancakeSwapFeature.sellToPancakeSwap.selector] = true;
-            stor.requiresRouting[IUniswapFeature.sellToUniswap.selector] = true;
-        }
+        // register methods that require special handling. Will revert if not implemented in explicitly routed.
+        stor.statusBySelectors[ILiquidityProviderFeature.sellToLiquidityProvider.selector] =
+            LibBatchMultiplexStorage.SelectorStatus.RequiresRouting;
+        stor.statusBySelectors[ITransformERC20Feature.transformERC20.selector] =
+            LibBatchMultiplexStorage.SelectorStatus.RequiresRouting;
+        stor.statusBySelectors[IERC721OrdersFeature.buyERC721.selector] =
+            LibBatchMultiplexStorage.SelectorStatus.RequiresRouting;
+        stor.statusBySelectors[IERC1155OrdersFeature.buyERC1155.selector] =
+            LibBatchMultiplexStorage.SelectorStatus.RequiresRouting;
+        stor.statusBySelectors[IPancakeSwapFeature.sellToPancakeSwap.selector] =
+            LibBatchMultiplexStorage.SelectorStatus.RequiresRouting;
+        stor.statusBySelectors[IUniswapFeature.sellToUniswap.selector] =
+            LibBatchMultiplexStorage.SelectorStatus.RequiresRouting;
     }
 
     /// @dev Revert with arbitrary bytes.
@@ -430,6 +456,13 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
     function _revertWithData(bytes memory data) private pure {
         assembly {
             revert(add(data, 32), mload(data))
+        }
+    }
+
+    function _unwrapWethLeftover() private {
+        uint256 wethBalance = WETH.balanceOf(address(this));
+        if (wethBalance > 0) {
+            WETH.withdraw(wethBalance);
         }
     }
 
