@@ -175,14 +175,17 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
     /// @inheritdoc IBatchMultiplexFeature
     function updateSelectorsStatus(UpdateSelectorStatus[] memory selectorsTuple) external override onlyOwner {
         for (uint i = 0; i < selectorsTuple.length; i++) {
-            LibBatchMultiplexStorage.getStorage().statusBySelectors[selectorsTuple[i].selector] = selectorsTuple[i].status;
+            LibBatchMultiplexStorage.getStorage().statusBySelectors[selectorsTuple[i].selector] = selectorsTuple[i]
+                .status;
         }
 
         emit SelectorStatusUpdated(selectorsTuple);
     }
 
     /// @inheritdoc IBatchMultiplexFeature
-    function getSelectorStatus(bytes4 selector) external view override returns (LibBatchMultiplexStorage.SelectorStatus selectorStatus) {
+    function getSelectorStatus(
+        bytes4 selector
+    ) external view override returns (LibBatchMultiplexStorage.SelectorStatus selectorStatus) {
         return LibBatchMultiplexStorage.getStorage().statusBySelectors[selector];
     }
 
@@ -412,42 +415,58 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
 
         // register non-supported methods
         // TODO: uncomment executeMetaTransactionV2 after tests update
-        //stor.statusBySelectors[IMetaTransactionsFeatureV2.executeMetaTransactionV2.selector] =
-        //    LibBatchMultiplexStorage.SelectorStatus.Blacklisted;
-        stor.statusBySelectors[IMetaTransactionsFeatureV2.batchExecuteMetaTransactionsV2.selector] =
-            LibBatchMultiplexStorage.SelectorStatus.Blacklisted;
+        //stor.statusBySelectors[
+        //    IMetaTransactionsFeatureV2.executeMetaTransactionV2.selector
+        //] = LibBatchMultiplexStorage.SelectorStatus.Blacklisted;
+        stor.statusBySelectors[
+            IMetaTransactionsFeatureV2.batchExecuteMetaTransactionsV2.selector
+        ] = LibBatchMultiplexStorage.SelectorStatus.Blacklisted;
         // meta transactions (v1) methods are payable and will require handling if supported in the future.
         // TODO: uncomment executeMetaTransaction after tests update
-        //stor.statusBySelectors[IMetaTransactionsFeature.executeMetaTransaction.selector] =
-        //    LibBatchMultiplexStorage.SelectorStatus.Blacklisted;
-        stor.statusBySelectors[IMetaTransactionsFeature.batchExecuteMetaTransactions.selector] =
-            LibBatchMultiplexStorage.SelectorStatus.Blacklisted;
-        stor.statusBySelectors[IERC721OrdersFeature.batchBuyERC721s.selector] =
-            LibBatchMultiplexStorage.SelectorStatus.Blacklisted;
-        stor.statusBySelectors[IERC1155OrdersFeature.batchBuyERC1155s.selector] =
-            LibBatchMultiplexStorage.SelectorStatus.Blacklisted;
-        stor.statusBySelectors[IMultiplexFeature.multiplexBatchSellEthForToken.selector] =
-            LibBatchMultiplexStorage.SelectorStatus.Blacklisted;
-        stor.statusBySelectors[IMultiplexFeature.multiplexMultiHopSellEthForToken.selector] =
-            LibBatchMultiplexStorage.SelectorStatus.Blacklisted;
-        stor.statusBySelectors[IOtcOrdersFeature.fillOtcOrderWithEth.selector] =
-            LibBatchMultiplexStorage.SelectorStatus.Blacklisted;
-        stor.statusBySelectors[IUniswapV3Feature.sellEthForTokenToUniswapV3.selector] =
-            LibBatchMultiplexStorage.SelectorStatus.Blacklisted;
+        //stor.statusBySelectors[
+        //    IMetaTransactionsFeature.executeMetaTransaction.selector
+        //] = LibBatchMultiplexStorage.SelectorStatus.Blacklisted;
+        stor.statusBySelectors[
+            IMetaTransactionsFeature.batchExecuteMetaTransactions.selector
+        ] = LibBatchMultiplexStorage.SelectorStatus.Blacklisted;
+        stor.statusBySelectors[IERC721OrdersFeature.batchBuyERC721s.selector] = LibBatchMultiplexStorage
+            .SelectorStatus
+            .Blacklisted;
+        stor.statusBySelectors[IERC1155OrdersFeature.batchBuyERC1155s.selector] = LibBatchMultiplexStorage
+            .SelectorStatus
+            .Blacklisted;
+        stor.statusBySelectors[IMultiplexFeature.multiplexBatchSellEthForToken.selector] = LibBatchMultiplexStorage
+            .SelectorStatus
+            .Blacklisted;
+        stor.statusBySelectors[IMultiplexFeature.multiplexMultiHopSellEthForToken.selector] = LibBatchMultiplexStorage
+            .SelectorStatus
+            .Blacklisted;
+        stor.statusBySelectors[IOtcOrdersFeature.fillOtcOrderWithEth.selector] = LibBatchMultiplexStorage
+            .SelectorStatus
+            .Blacklisted;
+        stor.statusBySelectors[IUniswapV3Feature.sellEthForTokenToUniswapV3.selector] = LibBatchMultiplexStorage
+            .SelectorStatus
+            .Blacklisted;
 
         // register methods that require special handling. Will revert if not implemented in explicitly routed.
-        stor.statusBySelectors[ILiquidityProviderFeature.sellToLiquidityProvider.selector] =
-            LibBatchMultiplexStorage.SelectorStatus.RequiresRouting;
-        stor.statusBySelectors[ITransformERC20Feature.transformERC20.selector] =
-            LibBatchMultiplexStorage.SelectorStatus.RequiresRouting;
-        stor.statusBySelectors[IERC721OrdersFeature.buyERC721.selector] =
-            LibBatchMultiplexStorage.SelectorStatus.RequiresRouting;
-        stor.statusBySelectors[IERC1155OrdersFeature.buyERC1155.selector] =
-            LibBatchMultiplexStorage.SelectorStatus.RequiresRouting;
-        stor.statusBySelectors[IPancakeSwapFeature.sellToPancakeSwap.selector] =
-            LibBatchMultiplexStorage.SelectorStatus.RequiresRouting;
-        stor.statusBySelectors[IUniswapFeature.sellToUniswap.selector] =
-            LibBatchMultiplexStorage.SelectorStatus.RequiresRouting;
+        stor.statusBySelectors[ILiquidityProviderFeature.sellToLiquidityProvider.selector] = LibBatchMultiplexStorage
+            .SelectorStatus
+            .RequiresRouting;
+        stor.statusBySelectors[ITransformERC20Feature.transformERC20.selector] = LibBatchMultiplexStorage
+            .SelectorStatus
+            .RequiresRouting;
+        stor.statusBySelectors[IERC721OrdersFeature.buyERC721.selector] = LibBatchMultiplexStorage
+            .SelectorStatus
+            .RequiresRouting;
+        stor.statusBySelectors[IERC1155OrdersFeature.buyERC1155.selector] = LibBatchMultiplexStorage
+            .SelectorStatus
+            .RequiresRouting;
+        stor.statusBySelectors[IPancakeSwapFeature.sellToPancakeSwap.selector] = LibBatchMultiplexStorage
+            .SelectorStatus
+            .RequiresRouting;
+        stor.statusBySelectors[IUniswapFeature.sellToUniswap.selector] = LibBatchMultiplexStorage
+            .SelectorStatus
+            .RequiresRouting;
     }
 
     /// @dev Revert with arbitrary bytes.
