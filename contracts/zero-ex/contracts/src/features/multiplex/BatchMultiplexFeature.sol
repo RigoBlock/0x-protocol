@@ -291,12 +291,13 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
             bytes memory auxiliaryData
         ) = abi.decode(args, (IERC20Token, IERC20Token, ILiquidityProvider, address, uint256, uint256, bytes));
 
-        // delegatecall to self if ERC20 to ERC20/ETH swap, call with value if ETH to ERC20/ETH
+        // Delegatecall to self if ERC20 to ERC20/ETH swap, call `ITransformERC20Feature._transformERC20()`
+        //  (internal variant) with value otherwise.
         if (!LibERC20Transformer.isTokenETH(inputToken)) {
             return address(this).delegatecall(callData);
         } else {
             return
-                address(this).call{value: LibERC20Transformer.isTokenETH(inputToken) ? sellAmount : 0}(
+                address(this).call{value: sellAmount}(
                     abi.encodeWithSelector(
                         ILiquidityProviderFeature.sellToLiquidityProvider.selector,
                         inputToken,
@@ -374,23 +375,28 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
             // Decode call args for `ITransformERC20Feature.transformERC20()` as a struct.
             args = abi.decode(encodedStructArgs, (ExternalTransformERC20Args));
         }
-        // Call `ITransformERC20Feature._transformERC20()` (internal variant).
-        return
-            address(this).call{value: LibERC20Transformer.isTokenETH(args.inputToken) ? args.inputTokenAmount : 0}(
-                abi.encodeWithSelector(
-                    ITransformERC20Feature._transformERC20.selector,
-                    ITransformERC20Feature.TransformERC20Args({
-                        taker: msg.sender,
-                        inputToken: args.inputToken,
-                        outputToken: args.outputToken,
-                        inputTokenAmount: args.inputTokenAmount,
-                        minOutputTokenAmount: args.minOutputTokenAmount,
-                        transformations: args.transformations,
-                        useSelfBalance: false,
-                        recipient: msg.sender
-                    })
-                )
-            );
+        // Delegatecall to self if ERC20 to ERC20/ETH swap, call `ITransformERC20Feature._transformERC20()`
+        //  (internal variant) with value otherwise.
+        if (!LibERC20Transformer.isTokenETH(args.inputToken)) {
+            return address(this).delegatecall(callData);
+        } else {
+            return
+                address(this).call{value: args.inputTokenAmount}(
+                    abi.encodeWithSelector(
+                        ITransformERC20Feature._transformERC20.selector,
+                        ITransformERC20Feature.TransformERC20Args({
+                            taker: msg.sender,
+                            inputToken: args.inputToken,
+                            outputToken: args.outputToken,
+                            inputTokenAmount: args.inputTokenAmount,
+                            minOutputTokenAmount: args.minOutputTokenAmount,
+                            transformations: args.transformations,
+                            useSelfBalance: false,
+                            recipient: msg.sender
+                        })
+                    )
+                );
+        }
     }
 
     /// @dev Extract arguments from call data by copying everything after the
@@ -441,6 +447,8 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
         stor.statusBySelectors[IERC1155OrdersFeature.batchBuyERC1155s.selector] = LibBatchMultiplexStorage
             .SelectorStatus
             .Blacklisted;
+        // The following blacklisted functions can be executed by encoding an ETH -> WETH transformation and
+        //  by using their respective non-payable ERC20 to ERC20 methods.
         stor.statusBySelectors[IMultiplexFeature.multiplexBatchSellEthForToken.selector] = LibBatchMultiplexStorage
             .SelectorStatus
             .Blacklisted;
