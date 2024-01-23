@@ -52,6 +52,31 @@ contract MultiplexUtils is LocalTest {
         return _makeTestRfqOrder(zrx, dai);
     }
 
+    function _makeTestLimitOrder(
+        IERC20Token makerToken,
+        IERC20Token takerToken
+    ) internal returns (LibNativeOrder.LimitOrder memory order) {
+        order = LibNativeOrder.LimitOrder({
+            makerToken: makerToken,
+            takerToken: takerToken,
+            makerAmount: 1e18,
+            takerAmount: 1e18,
+            takerTokenFeeAmount: 0,
+            maker: signerAddress,
+            taker: address(this),
+            sender: address(0),
+            feeRecipient: msg.sender,
+            pool: 0x0000000000000000000000000000000000000000000000000000000000000000,
+            expiry: uint64(block.timestamp + 60),
+            salt: 123
+        });
+        _mintTo(address(order.makerToken), order.maker, order.makerAmount);
+    }
+
+    function _makeTestLimitOrder() internal returns (LibNativeOrder.LimitOrder memory order) {
+        return _makeTestLimitOrder(zrx, dai);
+    }
+
     function _makeTestOtcOrder() internal returns (LibNativeOrder.OtcOrder memory order) {
         order = LibNativeOrder.OtcOrder({
             makerToken: zrx,
@@ -101,6 +126,19 @@ contract MultiplexUtils is LocalTest {
         sig = LibSignature.Signature(LibSignature.SignatureType.EIP712, v, r, s);
 
         callData = abi.encodeWithSelector(INativeOrdersFeature.fillRfqOrder.selector, order, sig, sellAmount);
+    }
+
+    function _makeLimitSubcallForBatch(
+        LibNativeOrder.LimitOrder memory order,
+        uint256 sellAmount
+    ) internal view returns (bytes memory callData, LibSignature.Signature memory sig) {
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
+            signerKey,
+            zeroExDeployed.features.nativeOrdersFeature.getLimitOrderHash(order)
+        );
+        sig = LibSignature.Signature(LibSignature.SignatureType.EIP712, v, r, s);
+
+        callData = abi.encodeWithSelector(INativeOrdersFeature.fillLimitOrder.selector, order, sig, sellAmount);
     }
 
     function _makeOtcSubcall(

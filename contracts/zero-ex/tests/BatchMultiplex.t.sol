@@ -12,6 +12,8 @@ import {LibSignature} from "src/features/libs/LibSignature.sol";
 import {LibNativeOrder} from "src/features/libs/LibNativeOrder.sol";
 import {IBatchMultiplexFeature} from "src/features/interfaces/IBatchMultiplexFeature.sol";
 import {IMetaTransactionsFeatureV2} from "src/features/interfaces/IMetaTransactionsFeatureV2.sol";
+import "src/transformers/LibERC20Transformer.sol";
+import "src/IZeroEx.sol";
 
 interface IMockBM {
     enum ErrorHandling {
@@ -41,106 +43,74 @@ contract BatchMultiplex is LocalTest, MultiplexUtils {
         bytes32 pool
     );
 
+    event LimitOrderFilled(
+        bytes32 orderHash,
+        address maker,
+        address taker,
+        address feeRecipient,
+        address makerToken,
+        address takerToken,
+        uint128 takerTokenFilledAmount,
+        uint128 makerTokenFilledAmount,
+        uint128 takerTokenFeeFilledAmount,
+        uint256 protocolFeePaid,
+        bytes32 pool
+    );
+
     address public immutable _validator;
 
     constructor() public {
         _validator = address(new BatchMultiplexValidator());
     }
 
-    function _makeMetaTransactionV2(
-        bytes memory callData
-    ) private view returns (IMetaTransactionsFeatureV2.MetaTransactionDataV2 memory, LibSignature.Signature memory) {
-        IMetaTransactionsFeatureV2.MetaTransactionDataV2 memory mtx = IMetaTransactionsFeatureV2.MetaTransactionDataV2({
-            signer: payable(otherSignerAddress),
-            sender: address(0),
-            expirationTimeSeconds: block.timestamp + 600,
-            salt: 123,
-            callData: callData,
-            feeToken: dai,
-            fees: new IMetaTransactionsFeatureV2.MetaTransactionFeeData[](0)
-        });
-
-        bytes32 mtxHash = zeroExDeployed.zeroEx.getMetaTransactionV2Hash(mtx);
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(otherSignerKey, mtxHash);
-        LibSignature.Signature memory sig = LibSignature.Signature(LibSignature.SignatureType.EIP712, v, r, s);
-
-        return (mtx, sig);
-    }
-
-    function _executeMetaTransaction(bytes memory callData) private {
-        IMetaTransactionsFeatureV2.MetaTransactionDataV2 memory mtx;
-        LibSignature.Signature memory sig;
-        (mtx, sig) = _makeMetaTransactionV2(callData);
-        zeroExDeployed.zeroEx.executeMetaTransactionV2(mtx, sig);
-    }
+    receive() external payable {}
 
     function _executeBatchMultiplexTransactions(bytes[] memory callData) private {
         zeroExDeployed.zeroEx.batchMultiplex(callData);
     }
 
+    function _executeBatchMultiplexTransactions(bytes[] memory callData, uint256 amount) private {
+        zeroExDeployed.zeroEx.batchMultiplex{value: amount}(callData);
+    }
+
     // batch
-
-    function test_metaTransaction_multiplexBatchSellTokenForToken_rfqOrder() external {
+    function test_multiplex_multiplexBatchSellTokenForToken_rfqOrder() external {
         LibNativeOrder.RfqOrder memory rfqOrder = _makeTestRfqOrder();
-        rfqOrder.taker = otherSignerAddress;
-        _mintTo(address(rfqOrder.takerToken), otherSignerAddress, rfqOrder.takerAmount);
+        _mintTo(address(rfqOrder.takerToken), rfqOrder.taker, rfqOrder.takerAmount);
 
-        _executeMetaTransaction(
-            abi.encodeWithSelector(
-                zeroExDeployed.zeroEx.multiplexBatchSellTokenForToken.selector,
-                dai,
-                zrx,
-                _makeArray(_makeRfqSubcall(rfqOrder)),
-                rfqOrder.takerAmount,
-                rfqOrder.makerAmount
-            )
+        zeroExDeployed.zeroEx.multiplexBatchSellTokenForToken(
+            dai,
+            zrx,
+            _makeArray(_makeRfqSubcall(rfqOrder)),
+            rfqOrder.takerAmount,
+            rfqOrder.makerAmount
         );
     }
 
-    function test_batchMultiplexMetaTransaction() external {
+    function test_batchMultiplex_multiplexBatchSellTokenForToken_rfqOrder() external {
         LibNativeOrder.RfqOrder memory rfqOrder = _makeTestRfqOrder();
-        rfqOrder.taker = otherSignerAddress;
-        _mintTo(address(rfqOrder.takerToken), otherSignerAddress, rfqOrder.takerAmount);
+        _mintTo(address(rfqOrder.takerToken), rfqOrder.taker, rfqOrder.takerAmount);
 
-        IMetaTransactionsFeatureV2.MetaTransactionDataV2 memory mtx;
-        LibSignature.Signature memory sig;
-        (mtx, sig) = _makeMetaTransactionV2(
-            abi.encodeWithSelector(
-                zeroExDeployed.zeroEx.multiplexBatchSellTokenForToken.selector,
-                dai,
-                zrx,
-                _makeArray(_makeRfqSubcall(rfqOrder)),
-                rfqOrder.takerAmount,
-                rfqOrder.makerAmount
-            )
+        bytes memory callData = abi.encodeWithSelector(
+            zeroExDeployed.zeroEx.multiplexBatchSellTokenForToken.selector,
+            dai,
+            zrx,
+            _makeArray(_makeRfqSubcall(rfqOrder)),
+            rfqOrder.takerAmount,
+            rfqOrder.makerAmount
         );
-
-        bytes[] memory callsArray = new bytes[](1);
-        callsArray[0] = abi.encodeWithSelector(zeroExDeployed.zeroEx.executeMetaTransactionV2.selector, mtx, sig);
 
         // direct call to implementation is not allowed
         vm.expectRevert("Batch_M_Feat/DIRECT_CALL_ERROR");
-        zeroExDeployed.features.batchMultiplexFeature.batchMultiplex(callsArray);
+        zeroExDeployed.features.batchMultiplexFeature.batchMultiplex(_makeArray(callData));
 
-        _executeBatchMultiplexTransactions(callsArray);
+        _executeBatchMultiplexTransactions(_makeArray(callData));
     }
 
-    function test_batchMultiplexExpectRevertWithInternalMethod() external {
+    function test_batchMultiplex_fillRfqOrder_revertsWithInternalMethod() external {
         LibNativeOrder.RfqOrder memory rfqOrder = _makeTestRfqOrder();
-        rfqOrder.taker = otherSignerAddress;
-        _mintTo(address(rfqOrder.takerToken), otherSignerAddress, rfqOrder.takerAmount);
-
-        LibSignature.Signature memory sig;
-        (, sig) = _makeMetaTransactionV2(
-            abi.encodeWithSelector(
-                zeroExDeployed.zeroEx.multiplexBatchSellTokenForToken.selector,
-                dai,
-                zrx,
-                _makeArray(_makeRfqSubcall(rfqOrder)),
-                rfqOrder.takerAmount,
-                rfqOrder.makerAmount
-            )
-        );
+        _mintTo(address(rfqOrder.takerToken), rfqOrder.taker, rfqOrder.takerAmount);
+        (, LibSignature.Signature memory sig) = _makeRfqSubcallForBatch(rfqOrder, rfqOrder.takerAmount);
 
         // test revert onlySelf when calling method directly
         vm.expectRevert(LibCommonRichErrors.OnlyCallableBySelfError(address(this)));
@@ -161,7 +131,7 @@ contract BatchMultiplex is LocalTest, MultiplexUtils {
         _executeBatchMultiplexTransactions(callsArray);
     }
 
-    function test_batchMultiplexRoleTakeover() external {
+    function test_batchMultiplex_extend_revertsOnRoleTakeover() external {
         // should revert when trying to add a selector mapping
         vm.expectRevert(LibOwnableRichErrors.OnlyOwnerError(address(this), zeroExDeployed.zeroEx.owner()));
         zeroExDeployed.zeroEx.extend(bytes4(keccak256("_extendSelf(bytes4,address)")), address(1));
@@ -204,7 +174,7 @@ contract BatchMultiplex is LocalTest, MultiplexUtils {
         );
     }
 
-    function test_batchMultiplexUnknownRevertError() external {
+    function test_batchMultiplex_revertsWithUnknownRevertErrorType() external {
         bytes[] memory callsArray = new bytes[](1);
         callsArray[0] = abi.encodeWithSelector(
             zeroExDeployed.zeroEx.extend.selector,
@@ -243,16 +213,13 @@ contract BatchMultiplex is LocalTest, MultiplexUtils {
         );
     }
 
-    function test_batchMutiplexTransaction_batchMultiplex_rfqOrderFallbackUniswapV2() external {
+    function test_batchMutiplex_rfqOrderMultiplexFallbackUniswapV2() external {
         LibNativeOrder.RfqOrder memory rfqOrder = _makeTestRfqOrder();
         _createUniswapV2Pool(uniV2Factory, dai, zrx, 10e18, 10e18);
         _mintTo(address(rfqOrder.takerToken), rfqOrder.taker, 10 * rfqOrder.takerAmount);
 
-        (bytes memory callData, LibSignature.Signature memory sig) = _makeRfqSubcallForBatch(
-            rfqOrder,
-            rfqOrder.takerAmount
-        );
-        _mintTo(address(dai), otherSignerAddress, 2e18);
+        (bytes memory callData, ) = _makeRfqSubcallForBatch(rfqOrder, rfqOrder.takerAmount);
+        //_mintTo(address(dai), otherSignerAddress, 2e18);
 
         bytes memory uniswapV2FallbackData = abi.encodeWithSelector(
             zeroExDeployed.zeroEx.multiplexBatchSellTokenForToken.selector,
@@ -276,5 +243,83 @@ contract BatchMultiplex is LocalTest, MultiplexUtils {
         );
 
         _executeBatchMultiplexTransactions(_makeArray(callData, uniswapV2FallbackData));
+    }
+
+    function test_batchMutiplex_rfqOrderLimitOrderBatch() external {
+        LibNativeOrder.RfqOrder memory rfqOrder = _makeTestRfqOrder();
+        _mintTo(address(rfqOrder.takerToken), rfqOrder.taker, 10 * rfqOrder.takerAmount);
+        LibNativeOrder.LimitOrder memory limitOrder = _makeTestLimitOrder();
+        _mintTo(address(limitOrder.takerToken), limitOrder.taker, limitOrder.takerAmount);
+
+        (bytes memory rfqCallData, ) = _makeRfqSubcallForBatch(rfqOrder, rfqOrder.takerAmount);
+        (bytes memory limitCallData, ) = _makeLimitSubcallForBatch(limitOrder, limitOrder.takerAmount);
+
+        vm.expectEmit(true, true, true, true);
+        emit RfqOrderFilled(
+            zeroExDeployed.features.nativeOrdersFeature.getRfqOrderHash(rfqOrder),
+            rfqOrder.maker,
+            rfqOrder.taker,
+            address(rfqOrder.makerToken),
+            address(rfqOrder.takerToken),
+            rfqOrder.takerAmount,
+            rfqOrder.makerAmount,
+            rfqOrder.pool
+        );
+
+        vm.expectEmit(true, true, true, true);
+        emit LimitOrderFilled(
+            zeroExDeployed.features.nativeOrdersFeature.getLimitOrderHash(limitOrder),
+            limitOrder.maker,
+            limitOrder.taker,
+            msg.sender,
+            address(limitOrder.makerToken),
+            address(limitOrder.takerToken),
+            limitOrder.takerAmount,
+            limitOrder.makerAmount,
+            0,
+            0,
+            limitOrder.pool
+        );
+
+        _executeBatchMultiplexTransactions(_makeArray(rfqCallData, limitCallData));
+    }
+
+    function test_batchMutiplex_transformERC20() external {
+        vm.deal(address(this), 1e19);
+        ITransformERC20Feature.Transformation[] memory transformations = new ITransformERC20Feature.Transformation[](1);
+        transformations[0].deploymentNonce = _findTransformerNonce(
+            address(zeroExDeployed.transformers.wethTransformer),
+            address(zeroExDeployed.transformerDeployer)
+        );
+        transformations[0].data = abi.encode(LibERC20Transformer.ETH_TOKEN_ADDRESS, 1e18);
+
+        bytes memory callData = abi.encodeWithSelector(
+            ITransformERC20Feature.transformERC20.selector,
+            IERC20Token(LibERC20Transformer.ETH_TOKEN_ADDRESS),
+            // output token
+            IERC20Token(address(zeroExDeployed.weth)),
+            // input token amount
+            1e18,
+            // min output token amount
+            1e18,
+            // list of transform
+            transformations
+        );
+
+        _executeBatchMultiplexTransactions(_makeArray(callData), 1e18);
+        assert(zeroExDeployed.weth.balanceOf(address(this)) == 1e18);
+    }
+
+    function test_batchMutiplex_FillLimitOrderPayable() external {
+        LibNativeOrder.LimitOrder memory limitOrder = _makeTestLimitOrder();
+        _mintTo(address(limitOrder.takerToken), limitOrder.taker, limitOrder.takerAmount);
+
+        (bytes memory callData, ) = _makeLimitSubcallForBatch(limitOrder, limitOrder.takerAmount);
+
+        //vm.deal(address(this), 1e19);
+
+        // TODO: check why fails when sending value
+        _executeBatchMultiplexTransactions(_makeArray(callData), 1e18);
+        //_executeBatchMultiplexTransactions(_makeArray(callData));
     }
 }

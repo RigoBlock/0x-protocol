@@ -26,6 +26,8 @@ import {
 
 const { NULL_ADDRESS, ZERO_AMOUNT } = constants;
 
+// TODO: rewrite test with direct methods, or simply transfer to foundry tests which will be
+//  included in coverage report.
 blockchainTests.resets('BatchMultiplex feature', env => {
     let owner: string;
     let maker: string;
