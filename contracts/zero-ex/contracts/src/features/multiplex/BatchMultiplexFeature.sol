@@ -19,6 +19,7 @@ import "@0x/contracts-erc20/src/IEtherToken.sol";
 import "@0x/contracts-utils/contracts/src/v06/LibBytesV06.sol";
 import "@0x/contracts-utils/contracts/src/v06/LibSafeMathV06.sol";
 import "../../examples/BatchMultiplexValidator.sol";
+import "../../features/libs/LibNativeOrder.sol";
 import "../../features/libs/LibNFTOrder.sol";
 import "../../fixins/FixinCommon.sol";
 import "../../fixins/FixinReentrancyGuard.sol";
@@ -28,6 +29,7 @@ import "../../storage/LibProxyStorage.sol";
 import "../../transformers/LibERC20Transformer.sol";
 import "../../vendor/ILiquidityProvider.sol";
 import "../interfaces/IFeature.sol";
+import "../interfaces/IBatchFillNativeOrdersFeature.sol";
 import "../interfaces/IBatchMultiplexFeature.sol";
 import "../interfaces/IERC721OrdersFeature.sol";
 import "../interfaces/IERC1155OrdersFeature.sol";
@@ -35,6 +37,7 @@ import "../interfaces/ILiquidityProviderFeature.sol";
 import "../interfaces/IMetaTransactionsFeature.sol";
 import "../interfaces/IMetaTransactionsFeatureV2.sol";
 import "../interfaces/IMultiplexFeature.sol";
+import "../interfaces/INativeOrdersFeature.sol";
 import "../interfaces/IPancakeSwapFeature.sol";
 import "../interfaces/IOtcOrdersFeature.sol";
 import "../interfaces/ITransformERC20Feature.sol";
@@ -175,8 +178,15 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
     /// @inheritdoc IBatchMultiplexFeature
     function updateSelectorsStatus(UpdateSelectorStatus[] memory selectorsTuple) external override onlyOwner {
         for (uint i = 0; i < selectorsTuple.length; i++) {
-            LibBatchMultiplexStorage.getStorage().statusBySelectors[selectorsTuple[i].selector] = selectorsTuple[i]
-                .status;
+            LibBatchMultiplexStorage.Storage storage stor = LibBatchMultiplexStorage.getStorage();
+
+            // revert to initial state if a methods is allowed. This means an upgrade that requires explicit
+            //  method whitelisting will be able to selector will return status `Whitelisted`.
+            if (selectorsTuple[i].status == LibBatchMultiplexStorage.SelectorStatus.Whitelisted) {
+                delete stor.statusBySelectors[selectorsTuple[i].selector];
+            } else {
+                stor.statusBySelectors[selectorsTuple[i].selector] = selectorsTuple[i].status;
+            }
         }
 
         emit SelectorStatusUpdated(selectorsTuple);
@@ -210,6 +220,9 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
                 return _executeERC721BuyCall(data, proxyStor.impls[selector]);
             } else if (selector == IERC1155OrdersFeature.buyERC1155.selector) {
                 return _executeERC1155BuyCall(data, proxyStor.impls[selector]);
+            } else if (selector == INativeOrdersFeature.fillLimitOrder.selector) {
+                // a custom handling is encoded as EP will try to refund msg.value - ethProtocolFeePaid
+                return _executeFillLimitOrderCall(data);
             } else {
                 revert("Batch_M_Feat/NOT_SUPPORTED");
             }
@@ -270,6 +283,33 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
                     sellOrder,
                     signature,
                     BuyParams(erc1155BuyAmount, address(this).balance, callbackData)
+                )
+            );
+    }
+
+    /// @dev Execute a `INativeOrdersFeature.fillLimitOrder()` meta-transaction call
+    ///      by decoding the call args and translating the call to the internal
+    ///      `INativeOrdersFeature._fillLimitOrder()` variant, where we can override
+    ///      the taker address.
+    function _executeFillLimitOrderCall(bytes memory callData) private returns (bool, bytes memory) {
+        bytes memory args = _extractArgumentsFromCallData(callData);
+        (
+            LibNativeOrder.LimitOrder memory order,
+            LibSignature.Signature memory signature,
+            uint128 takerTokenFillAmount
+        ) = abi.decode(args, (LibNativeOrder.LimitOrder, LibSignature.Signature, uint128));
+
+        // We call with null value to prevent protocol fee refund revert with delegatecall. If the fee
+        //  multiplier is positive, uint256(PROTOCOL_FEE_MULTIPLIER) * tx.gasprice will have to be sent.
+        return
+            address(this).call{value: 0}(
+                abi.encodeWithSelector(
+                    INativeOrdersFeature._fillLimitOrder.selector,
+                    order,
+                    signature,
+                    takerTokenFillAmount,
+                    msg.sender,
+                    msg.sender
                 )
             );
     }
@@ -419,17 +459,16 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
     }
 
     /// @dev Registers the non-supported methods or those that require re-routing.
-    /// @notice When feature is upgraded, the RP storage slot is not preserved. External method
-    ///   `updateSelectorsStatus` allows owner to change status of previously registered
-    ///   methods, should the new feature forget to update storage in this private method.
+    /// @notice When feature is upgraded, the EP storage is preserved. External method `updateSelectorsStatus` allows
+    ///   the owner to change status of previously registered methods. This method should include all payable methods
+    ///   and previously registered methods (unless storage slot cleared).
     function _registerCustomMethods() private {
         LibBatchMultiplexStorage.Storage storage stor = LibBatchMultiplexStorage.getStorage();
 
-        // register non-supported methods
-        // TODO: uncomment executeMetaTransactionV2 after tests update
-        //stor.statusBySelectors[
-        //    IMetaTransactionsFeatureV2.executeMetaTransactionV2.selector
-        //] = LibBatchMultiplexStorage.SelectorStatus.Blacklisted;
+        // Meta transactions not supported.
+        stor.statusBySelectors[IMetaTransactionsFeatureV2.executeMetaTransactionV2.selector] = LibBatchMultiplexStorage
+            .SelectorStatus
+            .Blacklisted;
         stor.statusBySelectors[
             IMetaTransactionsFeatureV2.batchExecuteMetaTransactionsV2.selector
         ] = LibBatchMultiplexStorage.SelectorStatus.Blacklisted;
@@ -441,28 +480,47 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
         stor.statusBySelectors[
             IMetaTransactionsFeature.batchExecuteMetaTransactions.selector
         ] = LibBatchMultiplexStorage.SelectorStatus.Blacklisted;
+
+        // Batch of NFT buys not supported but can be executed by combining them in an array of buys.
         stor.statusBySelectors[IERC721OrdersFeature.batchBuyERC721s.selector] = LibBatchMultiplexStorage
             .SelectorStatus
             .Blacklisted;
         stor.statusBySelectors[IERC1155OrdersFeature.batchBuyERC1155s.selector] = LibBatchMultiplexStorage
             .SelectorStatus
             .Blacklisted;
-        // The following blacklisted functions can be executed by encoding an ETH -> WETH transformation and
-        //  by using their respective non-payable ERC20 to ERC20 methods.
-        stor.statusBySelectors[IMultiplexFeature.multiplexBatchSellEthForToken.selector] = LibBatchMultiplexStorage
-            .SelectorStatus
-            .Blacklisted;
-        stor.statusBySelectors[IMultiplexFeature.multiplexMultiHopSellEthForToken.selector] = LibBatchMultiplexStorage
-            .SelectorStatus
-            .Blacklisted;
+
+        // The following methods are not supported, but ERC20 to ERC20 can be executed in multiplex.
         stor.statusBySelectors[IOtcOrdersFeature.fillOtcOrderWithEth.selector] = LibBatchMultiplexStorage
             .SelectorStatus
             .Blacklisted;
         stor.statusBySelectors[IUniswapV3Feature.sellEthForTokenToUniswapV3.selector] = LibBatchMultiplexStorage
             .SelectorStatus
             .Blacklisted;
+        stor.statusBySelectors[IPancakeSwapFeature.sellToPancakeSwap.selector] = LibBatchMultiplexStorage
+            .SelectorStatus
+            .Blacklisted;
+        stor.statusBySelectors[IUniswapFeature.sellToUniswap.selector] = LibBatchMultiplexStorage
+            .SelectorStatus
+            .Blacklisted;
 
-        // register methods that require special handling. Will revert if not implemented in explicitly routed.
+        // The following methods will revert whenever ETH is attached to the call and another subcall using
+        //  ETH is appended to the subcalls array.
+        stor.statusBySelectors[INativeOrdersFeature.fillOrKillLimitOrder.selector] = LibBatchMultiplexStorage
+            .SelectorStatus
+            .Blacklisted;
+        stor.statusBySelectors[IBatchFillNativeOrdersFeature.batchFillLimitOrders.selector] = LibBatchMultiplexStorage
+            .SelectorStatus
+            .Blacklisted;
+
+        // Multiplex payable methods not supported.
+        stor.statusBySelectors[IMultiplexFeature.multiplexBatchSellEthForToken.selector] = LibBatchMultiplexStorage
+            .SelectorStatus
+            .RequiresRouting;
+        stor.statusBySelectors[IMultiplexFeature.multiplexMultiHopSellEthForToken.selector] = LibBatchMultiplexStorage
+            .SelectorStatus
+            .RequiresRouting;
+
+        // register methods that require special handling. Will revert with error if not implemented in explicit route.
         stor.statusBySelectors[ILiquidityProviderFeature.sellToLiquidityProvider.selector] = LibBatchMultiplexStorage
             .SelectorStatus
             .RequiresRouting;
@@ -475,10 +533,7 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
         stor.statusBySelectors[IERC1155OrdersFeature.buyERC1155.selector] = LibBatchMultiplexStorage
             .SelectorStatus
             .RequiresRouting;
-        stor.statusBySelectors[IPancakeSwapFeature.sellToPancakeSwap.selector] = LibBatchMultiplexStorage
-            .SelectorStatus
-            .RequiresRouting;
-        stor.statusBySelectors[IUniswapFeature.sellToUniswap.selector] = LibBatchMultiplexStorage
+        stor.statusBySelectors[INativeOrdersFeature.fillLimitOrder.selector] = LibBatchMultiplexStorage
             .SelectorStatus
             .RequiresRouting;
     }
