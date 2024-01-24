@@ -13,12 +13,12 @@
 */
 
 pragma solidity ^0.6.5;
-pragma experimental ABIEncoderV2;
 
-interface IBatchMultiplexV2Feature {
-    /// @dev Routes the swaps in the `data` array to their respective swap implementations.
-    /// @notice Non-payable, does not support ETH to tokens calls.
-    /// @param data The array of swap transactions.
-    /// @return results The array of returned values from the swap calls.
-    function batchMultiplexV2(bytes[] calldata data) external returns (bytes[] memory results);
+/// @dev A library for defining types.
+library LibTypes {
+    enum ErrorBehavior {
+        REVERT,
+        STOP,
+        CONTINUE
+    }
 }

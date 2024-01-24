@@ -15,6 +15,7 @@
 pragma solidity ^0.6.5;
 pragma experimental ABIEncoderV2;
 
+import "../../features/libs/LibTypes.sol";
 import "../../storage/LibBatchMultiplexStorage.sol";
 
 interface IBatchMultiplexFeature {
@@ -29,29 +30,23 @@ interface IBatchMultiplexFeature {
     /// @param status Array of tuples of selectors and status (Whitelisted, Blacklisted, RequiresRouting).
     event SelectorStatusUpdated(UpdateSelectorStatus[] status);
 
-    enum ErrorHandling {
-        REVERT,
-        STOP,
-        CONTINUE
-    }
-
-    /// @dev Routes the swaps in the `data` array to their respective swap implementations.
+    /// @dev Routes the swaps in the `data` array to the EP.
     /// @param data The array of swap transactions.
     /// @return results The array of returned values from the swap calls.
-    function batchMultiplex(bytes[] calldata data) external payable returns (bytes[] memory results);
+    function batchMultiplexCall(bytes[] calldata data) external payable returns (bytes[] memory results);
 
-    /// @dev Routes the swaps in the `data` array to their respective swap implementations after
-    ///   validating them in an external validator contract and passes extra data and the desired error behavior.
+    /// @dev Routes the swaps in the `data` array to the EP after validating them in an external validator
+    ///   contract and passes extra data and the desired error behavior.
     /// @param data The array of swap transactions.
     /// @param extraData A string of extra data for project-specific validation.
     /// @param validatorAddress The address of the validator contract.
-    /// @param errorType Number of the error behavior type when one of the swaps fails.
+    /// @param errorBehavior Number of the error behavior type when one of the swaps fails.
     /// @return results The array of returned values from the swap calls.
-    function batchMultiplexOptionalParams(
+    function batchMultiplexOptionalParamsCall(
         bytes[] calldata data,
         bytes calldata extraData,
         address validatorAddress,
-        ErrorHandling errorType
+        LibTypes.ErrorBehavior errorBehavior
     ) external payable returns (bytes[] memory results);
 
     /// @dev A method to update the batch multiplex storage slot. It is restricted to the EP owner.

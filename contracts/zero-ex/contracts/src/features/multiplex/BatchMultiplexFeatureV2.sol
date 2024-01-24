@@ -15,16 +15,17 @@
 pragma solidity ^0.6.5;
 pragma experimental ABIEncoderV2;
 
+import "../../features/libs/LibTypes.sol";
 import "../../fixins/FixinCommon.sol";
 import "../../fixins/FixinReentrancyGuard.sol";
 import "../../migrations/LibMigrate.sol";
-import "../interfaces/IBatchMultiplexV2Feature.sol";
+import "../interfaces/IBatchMultiplexFeatureV2.sol";
 import "../interfaces/IFeature.sol";
 
 /// @dev This feature enables batch transactions by re-routing the single swaps to the exchange proxy.
-contract BatchMultiplexV2Feature is IFeature, IBatchMultiplexV2Feature, FixinCommon, FixinReentrancyGuard {
+contract BatchMultiplexFeatureV2 is IFeature, IBatchMultiplexFeatureV2, FixinCommon, FixinReentrancyGuard {
     /// @inheritdoc IFeature
-    string public constant override FEATURE_NAME = "BatchMultiplexV2Feature";
+    string public constant override FEATURE_NAME = "BatchMultiplexFeatureV2";
     /// @inheritdoc IFeature
     uint256 public immutable override FEATURE_VERSION = _encodeVersion(1, 0, 0);
 
@@ -48,12 +49,13 @@ contract BatchMultiplexV2Feature is IFeature, IBatchMultiplexV2Feature, FixinCom
     ///      Should be delegatecalled by `Migrate.migrate()`.
     /// @return success `LibMigrate.SUCCESS` on success.
     function migrate() external onlyDelegateCall returns (bytes4 success) {
-        _registerFeatureFunction(this.batchMultiplexV2.selector);
+        _registerFeatureFunction(this.batchMultiplexCallV2.selector);
+        _registerFeatureFunction(this.batchMultiplexOptionalParamsCallV2.selector);
         return LibMigrate.MIGRATE_SUCCESS;
     }
 
-    /// @inheritdoc IBatchMultiplexV2Feature
-    function batchMultiplexV2(
+    /// @inheritdoc IBatchMultiplexFeatureV2
+    function batchMultiplexCallV2(
         bytes[] calldata data
     )
         external
@@ -69,6 +71,38 @@ contract BatchMultiplexV2Feature is IFeature, IBatchMultiplexV2Feature, FixinCom
 
             if (!success) {
                 _revertWithData(result);
+            }
+
+            results[i] = result;
+        }
+    }
+
+    /// @inheritdoc IBatchMultiplexFeatureV2
+    function batchMultiplexOptionalParamsCallV2(
+        bytes[] calldata data,
+        LibTypes.ErrorBehavior errorBehavior
+    )
+        external
+        override
+        onlyDelegateCall
+        nonReentrant(REENTRANCY_BATCH_MULTIPLEX)
+        doesNotReduceEthBalance
+        returns (bytes[] memory results)
+    {
+        results = new bytes[](data.length);
+        for (uint256 i = 0; i < data.length; i++) {
+            (bool success, bytes memory result) = address(this).delegatecall(data[i]);
+
+            if (!success) {
+                if (errorBehavior == LibTypes.ErrorBehavior.REVERT) {
+                    _revertWithData(result);
+                } else if (errorBehavior == LibTypes.ErrorBehavior.STOP) {
+                    break;
+                } else if (errorBehavior == LibTypes.ErrorBehavior.CONTINUE) {
+                    continue;
+                } else {
+                    revert("Batch_M_Feat/UNKNOW_ERROR");
+                }
             }
 
             results[i] = result;

@@ -10,24 +10,25 @@ import {LibOwnableRichErrors} from "src/errors/LibOwnableRichErrors.sol";
 import {BatchMultiplexValidator} from "src/examples/BatchMultiplexValidator.sol";
 import {LibSignature} from "src/features/libs/LibSignature.sol";
 import {LibNativeOrder} from "src/features/libs/LibNativeOrder.sol";
+import {LibTypes} from "src/features/libs/LibTypes.sol";
 import {IBatchMultiplexFeature} from "src/features/interfaces/IBatchMultiplexFeature.sol";
 import {IMetaTransactionsFeatureV2} from "src/features/interfaces/IMetaTransactionsFeatureV2.sol";
 import "src/transformers/LibERC20Transformer.sol";
 import "src/IZeroEx.sol";
 
 interface IMockBM {
-    enum ErrorHandling {
+    enum ErrorBehavior {
         REVERT,
         STOP,
         CONTINUE,
         UNKNOWN
     }
 
-    function batchMultiplexOptionalParams(
+    function batchMultiplexOptionalParamsCall(
         bytes[] calldata data,
         bytes calldata extraData,
         address validatorAddress,
-        ErrorHandling errorType
+        ErrorBehavior errorBehavior
     ) external payable returns (bytes[] memory results);
 }
 
@@ -66,11 +67,11 @@ contract BatchMultiplex is LocalTest, MultiplexUtils {
     receive() external payable {}
 
     function _executeBatchMultiplexTransactions(bytes[] memory callData) private {
-        zeroExDeployed.zeroEx.batchMultiplex(callData);
+        zeroExDeployed.zeroEx.batchMultiplexCall(callData);
     }
 
     function _executeBatchMultiplexTransactions(bytes[] memory callData, uint256 amount) private {
-        zeroExDeployed.zeroEx.batchMultiplex{value: amount}(callData);
+        zeroExDeployed.zeroEx.batchMultiplexCall{value: amount}(callData);
     }
 
     // batch
@@ -87,7 +88,7 @@ contract BatchMultiplex is LocalTest, MultiplexUtils {
         );
     }
 
-    function test_batchMultiplex_multiplexBatchSellTokenForToken_rfqOrder() external {
+    function test_batchMultiplexCall_multiplexBatchSellTokenForToken_rfqOrder() external {
         LibNativeOrder.RfqOrder memory rfqOrder = _makeTestRfqOrder();
         _mintTo(address(rfqOrder.takerToken), rfqOrder.taker, rfqOrder.takerAmount);
 
@@ -102,12 +103,12 @@ contract BatchMultiplex is LocalTest, MultiplexUtils {
 
         // direct call to implementation is not allowed
         vm.expectRevert("Batch_M_Feat/DIRECT_CALL_ERROR");
-        zeroExDeployed.features.batchMultiplexFeature.batchMultiplex(_makeArray(callData));
+        zeroExDeployed.features.batchMultiplexFeature.batchMultiplexCall(_makeArray(callData));
 
         _executeBatchMultiplexTransactions(_makeArray(callData));
     }
 
-    function test_batchMultiplex_fillRfqOrder_revertsWithInternalMethod() external {
+    function test_batchMultiplexCall_fillRfqOrder_revertsWithInternalMethod() external {
         LibNativeOrder.RfqOrder memory rfqOrder = _makeTestRfqOrder();
         _mintTo(address(rfqOrder.takerToken), rfqOrder.taker, rfqOrder.takerAmount);
         (, LibSignature.Signature memory sig) = _makeRfqSubcallForBatch(rfqOrder, rfqOrder.takerAmount);
@@ -131,12 +132,12 @@ contract BatchMultiplex is LocalTest, MultiplexUtils {
         _executeBatchMultiplexTransactions(callsArray);
     }
 
-    function test_batchMultiplex_extend_revertsOnRoleTakeover() external {
+    function test_batchMultiplexCall_extend_revertsOnRoleTakeover() external {
         // should revert when trying to add a selector mapping
         vm.expectRevert(LibOwnableRichErrors.OnlyOwnerError(address(this), zeroExDeployed.zeroEx.owner()));
         zeroExDeployed.zeroEx.extend(bytes4(keccak256("_extendSelf(bytes4,address)")), address(1));
 
-        // we try and get same result with batchMultiplex
+        // we try and get same result with batchMultiplexCall
         bytes[] memory callsArray = new bytes[](1);
         callsArray[0] = abi.encodeWithSelector(
             zeroExDeployed.zeroEx.extend.selector,
@@ -150,31 +151,32 @@ contract BatchMultiplex is LocalTest, MultiplexUtils {
         // TODO: test the following assertiong with multiple calls
         bytes memory mockBytes = callsArray[0];
         vm.expectRevert(LibOwnableRichErrors.OnlyOwnerError(address(this), zeroExDeployed.zeroEx.owner()));
-        zeroExDeployed.zeroEx.batchMultiplexOptionalParams(
+        zeroExDeployed.zeroEx.batchMultiplexOptionalParamsCall(
             callsArray,
             mockBytes,
             address(0),
-            IBatchMultiplexFeature.ErrorHandling.REVERT
+            LibTypes.ErrorBehavior.REVERT
         );
 
         // does not extend but does stops instead of reverting
-        zeroExDeployed.zeroEx.batchMultiplexOptionalParams(
+        zeroExDeployed.zeroEx.batchMultiplexOptionalParamsCall(
             callsArray,
             mockBytes,
             address(0),
-            IBatchMultiplexFeature.ErrorHandling.STOP
+            LibTypes.ErrorBehavior.STOP
         );
 
         // does not extend but tries to continue exeuting next txns
-        zeroExDeployed.zeroEx.batchMultiplexOptionalParams(
+        zeroExDeployed.zeroEx.batchMultiplexOptionalParamsCall(
             callsArray,
             mockBytes,
             address(0),
-            IBatchMultiplexFeature.ErrorHandling.CONTINUE
+            LibTypes.ErrorBehavior.CONTINUE
         );
     }
 
-    function test_batchMultiplex_revertsWithUnknownRevertErrorType() external {
+    // Dummy test with rogue input arg.
+    function test_batchMultiplexCall_revertsWithUnknownRevertErrorType() external {
         bytes[] memory callsArray = new bytes[](1);
         callsArray[0] = abi.encodeWithSelector(
             zeroExDeployed.zeroEx.extend.selector,
@@ -184,11 +186,11 @@ contract BatchMultiplex is LocalTest, MultiplexUtils {
         bytes memory mockBytes = callsArray[0];
 
         bytes memory unknownRevertCalldata = abi.encodeWithSelector(
-            IBatchMultiplexFeature.batchMultiplexOptionalParams.selector,
+            IBatchMultiplexFeature.batchMultiplexOptionalParamsCall.selector,
             callsArray,
             mockBytes,
             address(0),
-            IMockBM.ErrorHandling.UNKNOWN
+            IMockBM.ErrorBehavior.UNKNOWN
         );
         vm.expectRevert();
         (bool revertsAsExpected, ) = address(zeroExDeployed.zeroEx).call(unknownRevertCalldata);
@@ -197,19 +199,19 @@ contract BatchMultiplex is LocalTest, MultiplexUtils {
         // TODO: not sure EVM returns the expected error when a different enum type is used, will not be
         //  able to reproduce error in coverage
         vm.expectRevert();
-        IMockBM(address(zeroExDeployed.zeroEx)).batchMultiplexOptionalParams(
+        IMockBM(address(zeroExDeployed.zeroEx)).batchMultiplexOptionalParamsCall(
             callsArray,
             mockBytes,
             address(0),
-            IMockBM.ErrorHandling.UNKNOWN
+            IMockBM.ErrorBehavior.UNKNOWN
         );
 
         vm.expectRevert(LibOwnableRichErrors.OnlyOwnerError(address(this), zeroExDeployed.zeroEx.owner()));
-        IMockBM(address(zeroExDeployed.zeroEx)).batchMultiplexOptionalParams(
+        IMockBM(address(zeroExDeployed.zeroEx)).batchMultiplexOptionalParamsCall(
             callsArray,
             mockBytes,
             address(0),
-            IMockBM.ErrorHandling.REVERT
+            IMockBM.ErrorBehavior.REVERT
         );
     }
 

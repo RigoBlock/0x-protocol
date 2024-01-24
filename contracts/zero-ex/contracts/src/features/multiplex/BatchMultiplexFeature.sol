@@ -21,6 +21,7 @@ import "@0x/contracts-utils/contracts/src/v06/LibSafeMathV06.sol";
 import "../../examples/BatchMultiplexValidator.sol";
 import "../../features/libs/LibNativeOrder.sol";
 import "../../features/libs/LibNFTOrder.sol";
+import "../../features/libs/LibTypes.sol";
 import "../../fixins/FixinCommon.sol";
 import "../../fixins/FixinReentrancyGuard.sol";
 import "../../migrations/LibMigrate.sol";
@@ -85,13 +86,12 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
         WETH = weth;
     }
 
-    // TODO: this method can be called by anyone in the implementation, check if should be delegatecall restricted.
     /// @dev Initialize and register this feature.
     ///      Should be delegatecalled by `Migrate.migrate()`.
     /// @return success `LibMigrate.SUCCESS` on success.
     function migrate() external onlyDelegateCall returns (bytes4 success) {
-        _registerFeatureFunction(this.batchMultiplex.selector);
-        _registerFeatureFunction(this.batchMultiplexOptionalParams.selector);
+        _registerFeatureFunction(this.batchMultiplexCall.selector);
+        _registerFeatureFunction(this.batchMultiplexOptionalParamsCall.selector);
         _registerFeatureFunction(this.updateSelectorsStatus.selector);
         _registerFeatureFunction(this.getSelectorStatus.selector);
 
@@ -101,7 +101,7 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
     }
 
     /// @inheritdoc IBatchMultiplexFeature
-    function batchMultiplex(
+    function batchMultiplexCall(
         bytes[] calldata data
     )
         external
@@ -124,7 +124,6 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
             results[i] = result;
         }
 
-        // TODO: use try/catch and return here
         // unwrap any WETH leftover
         _unwrapWethLeftover();
     }
@@ -132,11 +131,11 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
     /// @inheritdoc IBatchMultiplexFeature
     /// @notice This method should be used to get desired behavior STOP, REVERT, CONTINUE.
     ///   Validator contract will optionally assert validity of `extraData`.
-    function batchMultiplexOptionalParams(
+    function batchMultiplexOptionalParamsCall(
         bytes[] calldata data,
         bytes calldata extraData,
         address validatorAddress,
-        ErrorHandling errorType
+        LibTypes.ErrorBehavior errorBehavior
     )
         external
         payable
@@ -158,11 +157,11 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
             (bool success, bytes memory result) = _dispatch(data[i]);
 
             if (!success) {
-                if (errorType == ErrorHandling.REVERT) {
+                if (errorBehavior == LibTypes.ErrorBehavior.REVERT) {
                     _revertWithData(result);
-                } else if (errorType == ErrorHandling.STOP) {
+                } else if (errorBehavior == LibTypes.ErrorBehavior.STOP) {
                     break;
-                } else if (errorType == ErrorHandling.CONTINUE) {
+                } else if (errorBehavior == LibTypes.ErrorBehavior.CONTINUE) {
                     continue;
                 } else {
                     revert("Batch_M_Feat/UNKNOW_ERROR");

@@ -35,7 +35,7 @@ import "src/features/UniswapFeature.sol";
 import "src/features/UniswapV3Feature.sol";
 import "src/features/multiplex/MultiplexFeature.sol";
 import "src/features/multiplex/BatchMultiplexFeature.sol";
-import "src/features/multiplex/BatchMultiplexV2Feature.sol";
+import "src/features/multiplex/BatchMultiplexFeatureV2.sol";
 import "src/external/TransformerDeployer.sol";
 import "src/external/FeeCollectorController.sol";
 import "src/external/LiquidityProviderSandbox.sol";
@@ -76,7 +76,7 @@ contract DeployZeroEx is Test {
         ERC721OrdersFeature erc721OrdersFeature;
         MultiplexFeature multiplexFeature;
         BatchMultiplexFeature batchMultiplexFeature;
-        BatchMultiplexV2Feature batchMultiplexV2Feature;
+        BatchMultiplexFeatureV2 batchMultiplexFeatureV2;
     }
 
     struct Transformers {
@@ -135,7 +135,7 @@ contract DeployZeroEx is Test {
             address(ZERO_EX_DEPLOYED.features.batchFillNativeOrdersFeature)
         );
         emit log_named_address("BatchMultiplexFeature", address(ZERO_EX_DEPLOYED.features.batchMultiplexFeature));
-        emit log_named_address("BatchMultiplexV2Feature", address(ZERO_EX_DEPLOYED.features.batchMultiplexV2Feature));
+        emit log_named_address("BatchMultiplexFeatureV2", address(ZERO_EX_DEPLOYED.features.batchMultiplexFeatureV2));
         emit log_named_address("OtcOrdersFeature", address(ZERO_EX_DEPLOYED.features.otcOrdersFeature));
         emit log_named_address("UniswapFeature", address(ZERO_EX_DEPLOYED.features.uniswapFeature));
         emit log_named_address("UniswapV3Feature", address(ZERO_EX_DEPLOYED.features.uniswapV3Feature));
@@ -205,7 +205,7 @@ contract DeployZeroEx is Test {
         );
         ZERO_EX_DEPLOYED.features.batchFillNativeOrdersFeature = new BatchFillNativeOrdersFeature(address(ZERO_EX));
         ZERO_EX_DEPLOYED.features.batchMultiplexFeature = new BatchMultiplexFeature(ZERO_EX_DEPLOYED.weth);
-        ZERO_EX_DEPLOYED.features.batchMultiplexV2Feature = new BatchMultiplexV2Feature();
+        ZERO_EX_DEPLOYED.features.batchMultiplexFeatureV2 = new BatchMultiplexFeatureV2();
         ZERO_EX_DEPLOYED.features.otcOrdersFeature = new OtcOrdersFeature(address(ZERO_EX), ZERO_EX_DEPLOYED.weth);
         ZERO_EX_DEPLOYED.features.uniswapFeature = new UniswapFeature(ZERO_EX_DEPLOYED.weth);
         ZERO_EX_DEPLOYED.features.uniswapV3Feature = new UniswapV3Feature(
@@ -256,8 +256,8 @@ contract DeployZeroEx is Test {
             address(this)
         );
         IZERO_EX.migrate(
-            address(ZERO_EX_DEPLOYED.features.batchMultiplexV2Feature),
-            abi.encodeWithSelector(BatchMultiplexV2Feature.migrate.selector),
+            address(ZERO_EX_DEPLOYED.features.batchMultiplexFeatureV2),
+            abi.encodeWithSelector(BatchMultiplexFeatureV2.migrate.selector),
             address(this)
         );
         IZERO_EX.migrate(

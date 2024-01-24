@@ -34,7 +34,7 @@ import "./features/interfaces/IERC721OrdersFeature.sol";
 import "./features/interfaces/IERC1155OrdersFeature.sol";
 import "./features/interfaces/IERC165Feature.sol";
 import "./features/interfaces/IBatchMultiplexFeature.sol";
-import "./features/interfaces/IBatchMultiplexV2Feature.sol";
+import "./features/interfaces/IBatchMultiplexFeatureV2.sol";
 
 /// @dev Interface for a fully featured Exchange Proxy.
 interface IZeroEx is
@@ -56,7 +56,7 @@ interface IZeroEx is
     IERC1155OrdersFeature,
     IERC165Feature,
     IBatchMultiplexFeature,
-    IBatchMultiplexV2Feature
+    IBatchMultiplexFeatureV2
 {
     /// @dev Fallback for just receiving ether.
     receive() external payable;
