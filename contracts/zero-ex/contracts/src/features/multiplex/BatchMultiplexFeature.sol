@@ -89,7 +89,7 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
     /// @dev Initialize and register this feature.
     ///      Should be delegatecalled by `Migrate.migrate()`.
     /// @return success `LibMigrate.SUCCESS` on success.
-    function migrate() external returns (bytes4 success) {
+    function migrate() external onlyDelegateCall returns (bytes4 success) {
         _registerFeatureFunction(this.batchMultiplex.selector);
         _registerFeatureFunction(this.batchMultiplexOptionalParams.selector);
         _registerFeatureFunction(this.updateSelectorsStatus.selector);
@@ -124,6 +124,7 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
             results[i] = result;
         }
 
+        // TODO: use try/catch and return here
         // unwrap any WETH leftover
         _unwrapWethLeftover();
     }
@@ -539,16 +540,17 @@ contract BatchMultiplexFeature is IFeature, IBatchMultiplexFeature, FixinCommon,
     }
 
     function _unwrapWethLeftover() private {
-        uint256 wethBalance = WETH.balanceOf(address(this));
-        if (wethBalance > 0) {
-            WETH.withdraw(wethBalance);
-        }
+        try WETH.withdraw(WETH.balanceOf(address(this))) {
+            return;
+        } catch {}
     }
 
+    /// @dev Revert with direct call to implementation.
     function _checkDelegateCall() private view {
         require(address(this) != _implementation, "Batch_M_Feat/DIRECT_CALL_ERROR");
     }
 
+    /// @dev Revert when target address is EOA.
     function _isContract(address target) private view returns (bool) {
         uint256 size;
         assembly {
