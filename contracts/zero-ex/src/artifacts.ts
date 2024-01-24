@@ -10,6 +10,8 @@ import * as AvalancheBridgeAdapter from '../generated-artifacts/AvalancheBridgeA
 import * as BaseBridgeAdapter from '../generated-artifacts/BaseBridgeAdapter.json';
 import * as BaseGoerliBridgeAdapter from '../generated-artifacts/BaseGoerliBridgeAdapter.json';
 import * as BatchFillNativeOrdersFeature from '../generated-artifacts/BatchFillNativeOrdersFeature.json';
+import * as BatchMultiplexFeature from '../generated-artifacts/BatchMultiplexFeature.json';
+import * as BatchMultiplexValidator from '../generated-artifacts/BatchMultiplexValidator.json';
 import * as BSCBridgeAdapter from '../generated-artifacts/BSCBridgeAdapter.json';
 import * as CeloBridgeAdapter from '../generated-artifacts/CeloBridgeAdapter.json';
 import * as CurveLiquidityProvider from '../generated-artifacts/CurveLiquidityProvider.json';
@@ -20,6 +22,7 @@ import * as FeeCollectorController from '../generated-artifacts/FeeCollectorCont
 import * as FillQuoteTransformer from '../generated-artifacts/FillQuoteTransformer.json';
 import * as FullMigration from '../generated-artifacts/FullMigration.json';
 import * as IBatchFillNativeOrdersFeature from '../generated-artifacts/IBatchFillNativeOrdersFeature.json';
+import * as IBatchMultiplexFeature from '../generated-artifacts/IBatchMultiplexFeature.json';
 import * as IERC20Transformer from '../generated-artifacts/IERC20Transformer.json';
 import * as IFlashWallet from '../generated-artifacts/IFlashWallet.json';
 import * as ILiquidityProviderFeature from '../generated-artifacts/ILiquidityProviderFeature.json';
@@ -90,4 +93,7 @@ export const artifacts = {
     OptimismBridgeAdapter: OptimismBridgeAdapter as ContractArtifact,
     PolygonBridgeAdapter: PolygonBridgeAdapter as ContractArtifact,
     MetaTransactionsFeatureV2: MetaTransactionsFeatureV2 as ContractArtifact,
+    BatchMultiplexFeature: BatchMultiplexFeature as ContractArtifact,
+    IBatchMultiplexFeature: IBatchMultiplexFeature as ContractArtifact,
+    BatchMultiplexValidator: BatchMultiplexValidator as ContractArtifact,
 };

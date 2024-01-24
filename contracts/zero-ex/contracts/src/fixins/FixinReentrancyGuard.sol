@@ -28,6 +28,7 @@ abstract contract FixinReentrancyGuard {
     // Combinable reentrancy flags.
     /// @dev Reentrancy guard flag for meta-transaction functions.
     uint256 internal constant REENTRANCY_MTX = 0x1;
+    uint256 internal constant REENTRANCY_BATCH_MULTIPLEX = 0x2;
 
     /// @dev Cannot reenter a function with the same reentrancy guard flags.
     modifier nonReentrant(uint256 reentrancyFlags) virtual {

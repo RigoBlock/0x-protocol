@@ -5,6 +5,7 @@ import * as _ from 'lodash';
 
 import { artifacts } from './artifacts';
 import {
+    BatchMultiplexFeatureContract,
     FeeCollectorControllerContract,
     FullMigrationContract,
     InitialMigrationContract,
@@ -112,6 +113,7 @@ export interface FullFeatures extends BootstrapFeatures {
     metaTransactions: string;
     nativeOrders: string;
     otcOrders: string;
+    batchMultiplex: string;
 }
 
 /**
@@ -123,6 +125,7 @@ export interface FullFeatureArtifacts extends BootstrapFeatureArtifacts {
     nativeOrders: SimpleContractArtifact;
     feeCollectorController: SimpleContractArtifact;
     otcOrders: SimpleContractArtifact;
+    batchMultiplex: SimpleContractArtifact;
 }
 
 /**
@@ -156,6 +159,7 @@ const DEFAULT_FULL_FEATURES_ARTIFACTS = {
     nativeOrders: artifacts.NativeOrdersFeature,
     feeCollectorController: artifacts.FeeCollectorController,
     otcOrders: artifacts.OtcOrdersFeature,
+    batchMultiplex: artifacts.BatchMultiplexFeature,
 };
 
 /**
@@ -232,6 +236,17 @@ export async function deployFullFeaturesAsync(
                     txDefaults,
                     artifacts,
                     _config.zeroExAddress,
+                    _config.wethAddress,
+                )
+            ).address,
+        batchMultiplex:
+            features.batchMultiplex ||
+            (
+                await BatchMultiplexFeatureContract.deployFrom0xArtifactAsync(
+                    _featureArtifacts.batchMultiplex,
+                    provider,
+                    txDefaults,
+                    artifacts,
                     _config.wethAddress,
                 )
             ).address,

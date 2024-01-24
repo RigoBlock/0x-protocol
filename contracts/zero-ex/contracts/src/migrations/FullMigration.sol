@@ -17,6 +17,7 @@ pragma experimental ABIEncoderV2;
 
 import "../ZeroEx.sol";
 import "../features/interfaces/IOwnableFeature.sol";
+import "../features/multiplex/BatchMultiplexFeature.sol";
 import "../features/TransformERC20Feature.sol";
 import "../features/MetaTransactionsFeature.sol";
 import "../features/NativeOrdersFeature.sol";
@@ -33,6 +34,7 @@ contract FullMigration {
         MetaTransactionsFeature metaTransactions;
         NativeOrdersFeature nativeOrders;
         OtcOrdersFeature otcOrders;
+        BatchMultiplexFeature batchMultiplex;
     }
 
     /// @dev Parameters needed to initialize features.
@@ -144,6 +146,15 @@ contract FullMigration {
             ownable.migrate(
                 address(features.otcOrders),
                 abi.encodeWithSelector(OtcOrdersFeature.migrate.selector),
+                address(this)
+            );
+        }
+        // BatchMultiplexFeature
+        {
+            // Register the feature.
+            ownable.migrate(
+                address(features.batchMultiplex),
+                abi.encodeWithSelector(BatchMultiplexFeature.migrate.selector),
                 address(this)
             );
         }

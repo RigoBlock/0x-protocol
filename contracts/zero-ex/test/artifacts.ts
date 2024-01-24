@@ -12,6 +12,8 @@ import * as AvalancheBridgeAdapter from '../test/generated-artifacts/AvalancheBr
 import * as BaseBridgeAdapter from '../test/generated-artifacts/BaseBridgeAdapter.json';
 import * as BaseGoerliBridgeAdapter from '../test/generated-artifacts/BaseGoerliBridgeAdapter.json';
 import * as BatchFillNativeOrdersFeature from '../test/generated-artifacts/BatchFillNativeOrdersFeature.json';
+import * as BatchMultiplexFeature from '../test/generated-artifacts/BatchMultiplexFeature.json';
+import * as BatchMultiplexValidator from '../test/generated-artifacts/BatchMultiplexValidator.json';
 import * as BootstrapFeature from '../test/generated-artifacts/BootstrapFeature.json';
 import * as BridgeProtocols from '../test/generated-artifacts/BridgeProtocols.json';
 import * as BSCBridgeAdapter from '../test/generated-artifacts/BSCBridgeAdapter.json';
@@ -36,6 +38,7 @@ import * as FlashWallet from '../test/generated-artifacts/FlashWallet.json';
 import * as FullMigration from '../test/generated-artifacts/FullMigration.json';
 import * as FundRecoveryFeature from '../test/generated-artifacts/FundRecoveryFeature.json';
 import * as IBatchFillNativeOrdersFeature from '../test/generated-artifacts/IBatchFillNativeOrdersFeature.json';
+import * as IBatchMultiplexFeature from '../test/generated-artifacts/IBatchMultiplexFeature.json';
 import * as IBootstrapFeature from '../test/generated-artifacts/IBootstrapFeature.json';
 import * as IBridgeAdapter from '../test/generated-artifacts/IBridgeAdapter.json';
 import * as IERC1155OrdersFeature from '../test/generated-artifacts/IERC1155OrdersFeature.json';
@@ -222,6 +225,7 @@ export const artifacts = {
     LibSimpleFunctionRegistryRichErrors: LibSimpleFunctionRegistryRichErrors as ContractArtifact,
     LibTransformERC20RichErrors: LibTransformERC20RichErrors as ContractArtifact,
     LibWalletRichErrors: LibWalletRichErrors as ContractArtifact,
+    BatchMultiplexValidator: BatchMultiplexValidator as ContractArtifact,
     FeeCollector: FeeCollector as ContractArtifact,
     FeeCollectorController: FeeCollectorController as ContractArtifact,
     FlashWallet: FlashWallet as ContractArtifact,
@@ -247,6 +251,7 @@ export const artifacts = {
     UniswapFeature: UniswapFeature as ContractArtifact,
     UniswapV3Feature: UniswapV3Feature as ContractArtifact,
     IBatchFillNativeOrdersFeature: IBatchFillNativeOrdersFeature as ContractArtifact,
+    IBatchMultiplexFeature: IBatchMultiplexFeature as ContractArtifact,
     IBootstrapFeature: IBootstrapFeature as ContractArtifact,
     IERC1155OrdersFeature: IERC1155OrdersFeature as ContractArtifact,
     IERC165Feature: IERC165Feature as ContractArtifact,
@@ -270,6 +275,7 @@ export const artifacts = {
     LibNFTOrder: LibNFTOrder as ContractArtifact,
     LibNativeOrder: LibNativeOrder as ContractArtifact,
     LibSignature: LibSignature as ContractArtifact,
+    BatchMultiplexFeature: BatchMultiplexFeature as ContractArtifact,
     MultiplexFeature: MultiplexFeature as ContractArtifact,
     MultiplexLiquidityProvider: MultiplexLiquidityProvider as ContractArtifact,
     MultiplexOtc: MultiplexOtc as ContractArtifact,
